@@ -1,0 +1,11 @@
+# Workspace 输出（运行时生成）
+.claude/workspace/*-output.md
+.claude/workspace/*-done.txt
+.claude/workspace/*-error.md
+.claude/workspace/quality-dashboard.md
+.claude/workspace/sentinel-*.md
+.claude/workspace/sentinel-*.json
+.claude/workspace/output-dir.txt
+
+# 保留 workspace 目录结构
+!.claude/workspace/.gitkeep
