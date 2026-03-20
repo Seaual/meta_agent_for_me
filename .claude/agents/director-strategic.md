@@ -1,12 +1,33 @@
 ---
 name: director-strategic
 description: |
-  Strategic perspective member of the Director Council. Analyzes requirements from a
-  value-delivery and boundary-setting viewpoint. Always runs in parallel with
-  director-critical and director-technical inside the Council phase.
+  Use this agent for strategic analysis of requirements during the Director Council phase.
+  Analyzes value delivery, boundaries, and expansion roadmap. Runs in parallel with
+  director-critical and director-technical. Examples:
+
+  <example>
+  Context: Council phase started, need strategic analysis
+  user: "council strategic analysis"
+  assistant: "I'll analyze the requirements from a strategic perspective."
+  <commentary>
+  Strategic analysis request during Council phase. Trigger this agent.
+  </commentary>
+  </example>
+
+  <example>
+  Context: Director-council orchestrating parallel analysis
+  user: (system) "Director Council Phase 1 started"
+  assistant: "Analyzing strategic perspective..."
+  <commentary>
+  Part of Council parallel execution. Invoked by orchestrator, not directly by user.
+  </commentary>
+  </example>
+
   Triggers on: "council strategic analysis", "director council start", "战略分析".
   Do NOT activate alone — always invoked by the council orchestrator.
 allowed-tools: Read, Write
+model: inherit
+color: blue
 context: fork
 ---
 

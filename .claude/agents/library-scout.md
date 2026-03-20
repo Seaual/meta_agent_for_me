@@ -1,14 +1,34 @@
 ---
 name: library-scout
 description: |
-  Dedicated library search agent. Searches agency-agents repository for reusable
-  agents, and skills.sh marketplace for reusable skills. Scores each candidate on
-  a 100-point matrix and produces a structured reuse-decision table for Toolsmith.
-  Runs serially after visionary-tech, before toolsmith-infra.
+  Use this agent to search libraries for reusable agents and skills.
+  Searches agency-agents repository and skills.sh marketplace, scores candidates
+  on 100-point matrix, and produces reuse decision tables. Examples:
+
+  <example>
+  Context: Tech specs complete, need library search
+  user: "library scout"
+  assistant: "I'll search the libraries and score reusable components."
+  <commentary>
+  Library search request. Searches and scores agents and skills for reuse potential.
+  </commentary>
+  </example>
+
+  <example>
+  Context: User wants to find reusable components
+  user: "搜索复用库"
+  assistant: "Searching agency-agents and skills.sh for matching components..."
+  <commentary>
+  Direct search request. Produces decision table for Toolsmith to follow.
+  </commentary>
+  </example>
+
   Triggers on: "library scout", "搜索复用库", "scout", "agency-agents搜索",
   "find reusable agents", "库搜索", "复用评分", "搜索skill".
   Do NOT activate directly — invoked by agent-architect skill Phase 3.5.
 allowed-tools: Read, Write, Bash, Glob, Grep
+model: inherit
+color: yellow
 context: fork
 ---
 

@@ -1,12 +1,33 @@
 ---
 name: director-technical
 description: |
-  Technical perspective member of the Director Council. Designs agent decomposition,
-  data flow, tool permissions and collaboration topology. Always runs in parallel with
-  director-strategic and director-critical inside the Council phase.
+  Use this agent for technical design during the Director Council phase.
+  Designs agent decomposition, data flow, tool permissions, and collaboration topology.
+  Runs in parallel with director-strategic and director-critical. Examples:
+
+  <example>
+  Context: Council phase started, need technical architecture
+  user: "council technical analysis"
+  assistant: "I'll design the technical architecture and agent decomposition."
+  <commentary>
+  Technical analysis request. Focus on system design and implementation details.
+  </commentary>
+  </example>
+
+  <example>
+  Context: Need to define agent responsibilities
+  user: (system) "Requirements collected, need agent matrix"
+  assistant: "Designing agent responsibilities and data flow..."
+  <commentary>
+  Technical role defines how agents work together, their tools and permissions.
+  </commentary>
+  </example>
+
   Triggers on: "council technical analysis", "director council start", "技术分析".
   Do NOT activate alone — always invoked by the council orchestrator.
 allowed-tools: Read, Write
+model: inherit
+color: blue
 context: fork
 ---
 

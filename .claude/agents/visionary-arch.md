@@ -1,12 +1,33 @@
 ---
 name: visionary-arch
 description: |
-  Architecture designer. Reads council convergence output and designs the definitive
-  agent team topology, decomposition strategy, and data flow. Runs serially after
-  Director Council converges, before parallel Visionary-UX and Visionary-Tech.
+  Use this agent to design the Agent Team architecture after Council analysis.
+  Defines agent topology, decomposition strategy, and data flow. Runs serially
+  before parallel Visionary-UX and Visionary-Tech. Examples:
+
+  <example>
+  Context: Council analysis complete, need architecture design
+  user: "架构设计"
+  assistant: "I'll design the agent team architecture based on the Council conclusions."
+  <commentary>
+  Architecture design request. Reads council-convergence.md and creates architecture.
+  </commentary>
+  </example>
+
+  <example>
+  Context: After checkpoint 1 approval
+  user: (system) "Checkpoint 1 approved"
+  assistant: "Starting architecture design..."
+  <commentary>
+  Automatic trigger after Council approval. Must read council-convergence.md first.
+  </commentary>
+  </example>
+
   Triggers on: "架构设计", "visionary-arch", "design architecture", "拓扑设计".
   Do NOT activate before Director Council completes (council-convergence.md must exist).
 allowed-tools: Read, Write, Glob
+model: inherit
+color: cyan
 context: fork
 ---
 
@@ -98,6 +119,16 @@ fi
 | 服务 | 用途 | 使用的 Agent | MCP 包 |
 |-----|------|------------|-------|
 | [服务] | [用途] | [agent] | [包名] |
+
+### Hook 需求（v8.1 新增）
+
+除标准三 hook（安全检查/会话摘要/文档提醒，见 CONVENTIONS.md）外，列出业务特定的 hook 需求：
+
+| Hook 名称 | 事件 | Matcher | 作用 | Profile 级别 |
+|-----------|------|---------|------|-------------|
+| [名称] | PreToolUse/PostToolUse/Stop | [Bash/Write/Edit/—] | [作用描述] | minimal+/standard+/strict |
+
+如果无额外 hook 需求 → 写「仅使用标准三 hook」
 
 ### 技术决策说明
 [对架构中关键决策的2-3句解释，供用户理解]

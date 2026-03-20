@@ -3,7 +3,7 @@
 # sentinel-score/run.sh — Parallel Sentinel Scoring Engine
 # ============================================================
 # Launches 6 dimension checks in parallel, collects results.
-# ~3-4x faster than sequential execution.
+# Integrates agentic-eval patterns: convergence detection, problem classification.
 #
 # Usage:
 #   ./run.sh [target_dir]
@@ -18,12 +18,13 @@
 #   stdout — human-readable scoring report
 #   .claude/workspace/sentinel-report.json — machine-readable
 #   .claude/workspace/sentinel-last-issues.md — Toolsmith fix instructions
+#   .claude/workspace/sentinel-score-history.txt — score history for convergence detection
 # ============================================================
 
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly SCRIPT_VERSION="2.0.0"
+readonly SCRIPT_VERSION="3.0.0-agentic-eval"
 readonly PASS_THRESHOLD=8
 readonly TARGET_DIR="${1:-.}"
 readonly AGENT_DIR="$TARGET_DIR/.claude/agents"
@@ -86,6 +87,7 @@ manage_retry_counter() {
   fi
 
   echo $(( count + 1 )) > "$retry_file"
+  RETRY_COUNT=$(( count + 1 ))
 }
 
 # ── Parallel Execution ───────────────────────────────────────
@@ -172,6 +174,83 @@ collect_results() {
   done
 }
 
+# ── Convergence Detection (agentic-eval) ─────────────────────
+
+check_convergence() {
+  local total_score=$(( SCORE_1 + SCORE_2 + SCORE_3 + SCORE_4 + SCORE_5 + SCORE_6 ))
+  local history_file="$WORKSPACE/sentinel-score-history.txt"
+  local prev_score=0
+
+  # Read previous total score
+  if [[ -f "$history_file" ]]; then
+    prev_score=$(tail -1 "$history_file" 2>/dev/null || echo "0")
+  fi
+
+  # Record current score
+  echo "$total_score" >> "$history_file"
+
+  # Check convergence
+  if [[ "$total_score" -le "$prev_score" ]] && [[ "$RETRY_COUNT" -gt 1 ]]; then
+    echo -e "\n${YELLOW}${BOLD}⚠️  Convergence Warning${NC}"
+    echo -e "  Score did not improve: ${prev_score}/60 → ${total_score}/60"
+    echo -e "  This may indicate:"
+    echo -e "    - Fix instructions are not specific enough"
+    echo -e "    - Issues are architectural (need redesign)"
+    echo -e "    - Multiple issues are interdependent"
+    return 1  # Not converging
+  fi
+
+  return 0  # Converging or first run
+}
+
+# ── Problem Classification (agentic-eval) ────────────────────
+
+classify_issues() {
+  local issues_file="$WORKSPACE/sentinel-last-issues.md"
+  [[ ! -f "$issues_file" ]] && return
+
+  local simple_fixes=()
+  local refactor_fixes=()
+  local arch_fixes=()
+
+  # Classify based on keywords and scores
+  [[ $SCORE_1 -lt $PASS_THRESHOLD ]] && simple_fixes+=("Format issues (missing fields, naming)")
+  [[ $SCORE_2 -lt $PASS_THRESHOLD ]] && refactor_fixes+=("Agent conflicts (trigger overlap, workspace conflicts)")
+  [[ $SCORE_3 -lt $PASS_THRESHOLD ]] && arch_fixes+=("Logic issues (missing workflow, dependency gaps)")
+  [[ $SCORE_4 -lt $PASS_THRESHOLD ]] && simple_fixes+=("Security issues (unsafe patterns)")
+  [[ $SCORE_5 -lt $PASS_THRESHOLD ]] && simple_fixes+=("Quality issues (placeholders, missing content)")
+  [[ $SCORE_6 -lt $PASS_THRESHOLD ]] && refactor_fixes+=("Executability issues (missing commands, hooks)")
+
+  # Prepend classification to issues file
+  local classification="# Issue Classification (agentic-eval Evaluator-Optimizer)
+
+## Summary
+- Total Score: $(( SCORE_1 + SCORE_2 + SCORE_3 + SCORE_4 + SCORE_5 + SCORE_6 ))/60
+- Round: ${RETRY_COUNT}/3
+- Convergence: $( [[ -f "$WORKSPACE/sentinel-score-history.txt" ]] && tail -2 "$WORKSPACE/sentinel-score-history.txt" | head -1 || echo "N/A" ) → $(( SCORE_1 + SCORE_2 + SCORE_3 + SCORE_4 + SCORE_5 + SCORE_6 ))
+
+## Problem Categories
+
+### 🔧 Simple Fixes (Direct execution)
+$( [[ ${#simple_fixes[@]} -gt 0 ]] && printf '%s\n' "${simple_fixes[@]}" || echo "- None" )
+
+### 🔄 Needs Refactoring (May need design adjustment)
+$( [[ ${#refactor_fixes[@]} -gt 0 ]] && printf '%s\n' "${refactor_fixes[@]}" || echo "- None" )
+
+### 🏗️ Architectural Issues (May require rollback)
+$( [[ ${#arch_fixes[@]} -gt 0 ]] && printf '%s\n' "${arch_fixes[@]}" || echo "- None" )
+
+---
+
+"
+
+  # Prepend to existing file
+  local temp_file=$(mktemp)
+  echo "$classification" > "$temp_file"
+  cat "$issues_file" >> "$temp_file"
+  mv "$temp_file" "$issues_file"
+}
+
 # ── Generate Report ──────────────────────────────────────────
 
 generate_report() {
@@ -184,9 +263,11 @@ generate_report() {
   done
 
   local dim_labels=("Format compliance" "Agent conflicts" "Logic feasibility" "Code security" "Content quality" "Executability")
+  local total_score=$(( SCORE_1 + SCORE_2 + SCORE_3 + SCORE_4 + SCORE_5 + SCORE_6 ))
 
   echo -e "\n${BOLD}════════════════════════════════════════${NC}"
-  echo -e "${BOLD} Sentinel Scoring Report v${SCRIPT_VERSION} (round ${retry_count})${NC}"
+  echo -e "${BOLD} Sentinel Scoring Report v${SCRIPT_VERSION}${NC}"
+  echo -e "${BOLD} Round ${retry_count}/3 | Total: ${total_score}/60${NC}"
   echo -e "${BOLD}════════════════════════════════════════${NC}"
 
   for i in {0..5}; do
@@ -203,8 +284,9 @@ generate_report() {
   if $overall_pass; then
     echo -e " Result: ${GREEN}${BOLD}✅ PASSED${NC}"
     echo "0" > "$WORKSPACE/sentinel-retry-count.txt"
+    echo "" > "$WORKSPACE/sentinel-score-history.txt"
   else
-    echo -e " Result: ${RED}${BOLD}🔄 FAILED${NC} (round ${retry_count}, max 3)"
+    echo -e " Result: ${RED}${BOLD}🔄 FAILED${NC}"
   fi
   echo -e "${BOLD}════════════════════════════════════════${NC}\n"
 
@@ -214,6 +296,7 @@ generate_report() {
   "version": "${SCRIPT_VERSION}",
   "round": ${retry_count},
   "pass_threshold": ${PASS_THRESHOLD},
+  "total_score": ${total_score},
   "scores": {
     "format_compliance": ${SCORE_1},
     "agent_conflicts": ${SCORE_2},
@@ -245,6 +328,10 @@ EOF
         (( idx++ )) || true
       done
     } > "$WORKSPACE/sentinel-last-issues.md"
+
+    # Apply agentic-eval classification
+    classify_issues
+
     echo -e "${CYAN}Fix instructions: $WORKSPACE/sentinel-last-issues.md${NC}"
   fi
 
@@ -254,13 +341,14 @@ EOF
 # ── Main ─────────────────────────────────────────────────────
 
 main() {
-  echo -e "${BOLD}Sentinel Scoring Engine v${SCRIPT_VERSION} (parallel)${NC}"
+  echo -e "${BOLD}Sentinel Scoring Engine v${SCRIPT_VERSION}${NC}"
   echo "Target: $TARGET_DIR"
 
   manage_retry_counter
   preflight_check
   run_dimensions_parallel
   collect_results
+  check_convergence || true  # Don't fail on non-convergence
   generate_report
 }
 

@@ -1,181 +1,149 @@
 ---
 name: output-validator
 description: |
-  Activate when generated Agent Team files need to be validated, checked for consistency, 
-  or verified before deployment. Also use for post-generation quality checks.
-  Triggers on: "validate config", "check agent files", "验证配置", "检查生成结果",
-  "is the config correct", "配置有问题吗", "before I use this", "review output".
-  Do NOT use for creating new agents or writing new skills (use agent-architect instead).
-allowed-tools: Read, Bash, Grep, Glob
+  Validates generated Agent Team output: frontmatter, permissions, hooks,
+  slash commands, self-improving, instincts. Called by toolsmith-assembler
+  after all files are generated.
+  Triggers on: "validate output", "校验输出", "output check", "质量自检".
+  Do NOT use for Sentinel scoring (use sentinel-score instead).
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-# Skill: Output Validator — 输出验证器
+# Skill: Output Validator — 输出校验器
 
 ## 概述
-对 Meta-Agents 生成的 Agent Team 配置文件进行全面验证，确保可以在 Claude Code 中正常使用。
+
+对生成的 Agent Team 执行全面质量自检，覆盖：格式合规、权限一致性、Slash Commands 完整性、Hook 完整性、self-improving 一致性、Instincts 完整性。
+
+由 toolsmith-assembler 在所有文件生成后调用。修复能力有限的问题直接修复，复杂问题记录到日志供 Sentinel 处理。
 
 ---
 
-## 验证流程
+## 输入
 
-### Stage 1：文件结构验证
+- `$OUTPUT_DIR` — 从 `.claude/workspace/output-dir.txt` 读取
+- `profile.txt` — 运行时 Profile
+- `self-improving.txt` — 是否启用自我改进
+- `instincts-enabled.txt` — 是否启用 Instincts
+
+---
+
+## 检查项
+
+### 1. 基础格式
 
 ```bash
-# 检查预期文件是否存在
-required_files=(
-  "CLAUDE.md"
-  ".claude/agents"
-  ".claude/skills"
-)
+cd "$OUTPUT_DIR"
+PASS=true
 
-for f in "${required_files[@]}"; do
-  if [ -e "$f" ]; then
-    echo "✅ $f"
-  else
-    echo "🔴 缺失: $f"
-  fi
+for f in .claude/agents/*.md; do
+  [ -f "$f" ] || continue
+  head -1 "$f" | grep -q "^---$" || { echo "🔴 frontmatter: $f"; PASS=false; }
+  grep -q "^name:" "$f"          || { echo "🔴 缺 name: $f"; PASS=false; }
+  grep -q "^description:" "$f"   || { echo "🔴 缺 description: $f"; PASS=false; }
+  grep -q "^allowed-tools:" "$f" || { echo "🔴 缺 allowed-tools: $f"; PASS=false; }
 done
 
-# 列出所有生成的文件
-echo ""
-echo "生成的文件树："
-find .claude -type f -name "*.md" 2>/dev/null | sort
-find .claude -type f -name "*.sh" 2>/dev/null | sort
-find .claude -type f -name "*.py" 2>/dev/null | sort
+for f in .claude/skills/*/SKILL.md; do
+  [ -f "$f" ] || continue
+  head -1 "$f" | grep -q "^---$" || { echo "🔴 frontmatter: $f"; PASS=false; }
+done
+
+grep -rn "TODO\|\[待填写\]\|PLACEHOLDER" .claude/ 2>/dev/null | grep -v ".git" \
+  && echo "🟡 发现占位符" || echo "✅ 无占位符"
+
+[ -f "CONVENTIONS.md" ] || { echo "🔴 缺 CONVENTIONS.md"; PASS=false; }
+[ -f "README.md" ]      || { echo "🔴 缺 README.md"; PASS=false; }
 ```
 
-### Stage 2：Frontmatter 完整性检查
+### 2. 权限一致性
 
-对每个 `.md` 文件执行以下检查：
+对每个 agent，检查正文中的写入/执行动作是否有对应的 allowed-tools，自动修正。
+
+### 3. Slash Commands 完整性
 
 ```bash
-validate_frontmatter() {
-  local file="$1"
-  local issues=()
-  
-  # 检查开头是否有 ---
-  if ! head -1 "$file" | grep -q "^---$"; then
-    issues+=("缺少开头 ---")
-  fi
-  
-  # 检查 name 字段
-  if ! grep -q "^name:" "$file"; then
-    issues+=("缺少 name 字段")
-  fi
-  
-  # 检查 name 是否为 kebab-case
-  local name=$(grep "^name:" "$file" | sed 's/name: *//' | tr -d '"')
-  if echo "$name" | grep -qE "[A-Z_\s]"; then
-    issues+=("name '$name' 不是 kebab-case")
-  fi
-  
-  # 检查 description 字段
-  if ! grep -q "^description:" "$file"; then
-    issues+=("缺少 description 字段")
-  fi
-  
-  # 检查 allowed-tools 字段
-  if ! grep -q "^allowed-tools:" "$file"; then
-    issues+=("缺少 allowed-tools 字段")
-  fi
-  
-  if [ ${#issues[@]} -eq 0 ]; then
-    echo "✅ $(basename $file)"
-  else
-    echo "🔴 $(basename $file):"
-    for issue in "${issues[@]}"; do
-      echo "   - $issue"
-    done
-  fi
+COMMANDS_DIR=".claude/commands"
+AGENTS_DIR=".claude/agents"
+
+[ -d "$COMMANDS_DIR" ]          || { echo "❌ 缺 commands/"; PASS=false; }
+[ -f "$COMMANDS_DIR/team.md" ]  || { echo "❌ 缺 commands/team.md"; PASS=false; }
+
+for f in "$AGENTS_DIR"/*.md; do
+  [ -f "$f" ] || continue
+  name=$(basename "$f")
+  [ -f "$COMMANDS_DIR/$name" ] || { echo "❌ 缺 commands/$name"; PASS=false; }
+done
+```
+
+### 4. Hook 完整性 + 权限配置
+
+```bash
+PROFILE=$(cat ../.claude/workspace/profile.txt 2>/dev/null || echo "standard")
+
+[ -f ".claude/settings.json" ] || { echo "🔴 缺 settings.json"; PASS=false; }
+
+# 检查权限配置
+grep -q '"skipDangerousModePermissionPrompt"' ".claude/settings.json" 2>/dev/null \
+  || { echo "🔴 缺 skipDangerousModePermissionPrompt"; PASS=false; }
+grep -q '"permissions"' ".claude/settings.json" 2>/dev/null \
+  || { echo "🔴 缺 permissions 配置"; PASS=false; }
+grep -q '"allow"' ".claude/settings.json" 2>/dev/null \
+  || { echo "🔴 缺 permissions.allow"; PASS=false; }
+
+# 检查 hooks 配置
+grep -q '"hooks"' ".claude/settings.json" 2>/dev/null || { echo "🔴 无 hooks 配置"; PASS=false; }
+
+[ -f "scripts/hooks/pre-tool-safety.js" ] || { echo "🔴 缺安全检查 hook"; PASS=false; }
+
+if [ "$PROFILE" = "standard" ] || [ "$PROFILE" = "strict" ]; then
+  [ -f "scripts/hooks/session-summary.js" ] || { echo "🔴 缺会话摘要 hook"; PASS=false; }
+fi
+
+if [ "$PROFILE" = "strict" ]; then
+  [ -f "scripts/hooks/post-write-doc-check.js" ] || { echo "🔴 缺文档提醒 hook"; PASS=false; }
+fi
+```
+
+### 5. Self-Improving 一致性
+
+```bash
+SELF_IMPROVING=$(cat ../.claude/workspace/self-improving.txt 2>/dev/null || echo "no")
+[ "$SELF_IMPROVING" = "yes" ] && {
+  [ -d ".claude/skills/self-improving-agent" ] || echo "🔧 需要 self-improving skill"
+  [ -d ".learnings" ]                          || echo "🔧 需要 .learnings/"
+  grep -q "@.claude/skills/self-improving-agent" "CLAUDE.md" || echo "🔧 需要 @引用"
+  # 自动修复逻辑（从全局复制、创建目录、插入引用）同 v7
 }
 ```
 
-### Stage 3：内容一致性检查
+### 6. Instincts 完整性（v8.1）
 
-检查以下一致性问题：
-
-**3a. Agent 名称一致性**
-- `.claude/agents/xxx.md` 中的文件名应与 frontmatter 中的 `name:` 字段匹配
-- 例如：文件名 `code-reviewer.md` → frontmatter `name: code-reviewer` ✅
-- 例如：文件名 `code-reviewer.md` → frontmatter `name: codeReviewer` ❌
-
-**3b. Skill 目录与名称一致性**
-- `.claude/skills/my-skill/SKILL.md` 中的目录名应与 `name:` 匹配
-- 例如：目录 `my-skill/` → frontmatter `name: my-skill` ✅
-
-**3c. CLAUDE.md 与文件一致性**
-- CLAUDE.md 中提到的所有 agent 名称，应该有对应的 `.md` 文件存在
-- 检查方式：提取 CLAUDE.md 中所有 agent 名称，逐一验证文件存在
-
-**3d. allowed-tools 合法性**
+```bash
+INSTINCTS=$(cat ../.claude/workspace/instincts-enabled.txt 2>/dev/null || echo "no")
+[ "$INSTINCTS" = "yes" ] && {
+  [ -d ".learnings/entries" ]   || { echo "🔴 缺 entries/"; PASS=false; }
+  [ -d ".learnings/instincts" ] || { echo "🔴 缺 instincts/"; PASS=false; }
+  [ -f ".claude/skills/instinct-engine/SKILL.md" ] || echo "🔧 需要 instinct-engine skill"
+  grep -q "@.claude/skills/instinct-engine" "CLAUDE.md" || echo "🔧 需要 @引用"
+}
 ```
-有效工具列表：Read, Write, Edit, Bash, Grep, Glob
-```
-任何不在此列表中的工具名称都是无效的。
 
-### Stage 4：潜在问题检测
+### 7. 脚本权限
 
-**4a. 过于宽泛的 description 检测**
-如果 description 只有一行且少于 30 个字符，标记为「可能过于简单」。
-
-**4b. 过多工具权限**
-如果一个 agent 拥有所有 6 个工具权限（Read, Write, Edit, Bash, Grep, Glob），
-标记为「权限可能过多，建议审查」。
-
-**4c. 空 agent 文件**
-如果一个 `.md` 文件在 frontmatter 之后几乎没有内容（<100 字符），
-标记为「agent 系统提示词可能为空」。
-
-**4d. 重复的 agent description 关键词**
-检查多个 agent 的 description 是否共享相同的触发关键词，
-这可能导致 Claude Code 选择错误的 agent。
-
-### Stage 5：生成验证报告
-
-```markdown
-## 验证报告
-
-**验证时间**: [timestamp]
-**目标目录**: [directory]
-**验证结果**: ✅ 通过 / ❌ 发现问题
-
-### 文件清单
-| 文件 | 状态 | 备注 |
-|-----|------|------|
-| CLAUDE.md | ✅ | |
-| .claude/agents/xxx.md | ✅ / 🔴 | [问题描述] |
-| .claude/skills/yyy/SKILL.md | ✅ / 🟡 | [警告] |
-
-### 发现的问题
-🔴 **致命问题**（必须修复才能使用）:
-1. [问题描述] — 文件: [路径]
-
-🟡 **警告**（建议修复）:
-1. [警告描述] — 文件: [路径]
-
-🟢 **建议**（可选优化）:
-1. [建议描述]
-
-### 使用建议
-[基于验证结果的具体建议]
+```bash
+find .claude -name "*.sh" 2>/dev/null | while read s; do
+  [ -x "$s" ] || { chmod +x "$s"; echo "🔧 修复权限: $s"; }
+done
+find scripts -name "*.js" 2>/dev/null | while read s; do
+  head -1 "$s" | grep -q "node" || echo "🟡 缺 node shebang: $s"
+done
 ```
 
 ---
 
-## 快速验证命令
+## 输出
 
 ```bash
-# 一键验证所有 agent 配置
-for f in .claude/agents/*.md; do
-  echo "── $(basename $f) ──"
-  head -10 "$f"
-  echo ""
-done
-
-# 检查所有 allowed-tools 设置
-grep -h "^allowed-tools:" .claude/agents/*.md .claude/skills/*/SKILL.md 2>/dev/null \
-  | sort | uniq -c | sort -rn
-
-# 检查所有 name 字段
-grep -h "^name:" .claude/agents/*.md .claude/skills/*/SKILL.md 2>/dev/null
+$PASS && echo "✅ 全部校验通过" || echo "⚠️ 存在问题，Sentinel 将详细审查"
 ```

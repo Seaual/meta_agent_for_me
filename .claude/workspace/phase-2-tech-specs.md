@@ -1,216 +1,291 @@
-## Visionary-Tech 规格
+# Visionary-Tech 规格
 
 **基于**：phase-1-architecture.md
 **负责范围**：工具权限 + Skill/MCP + Workspace 协议
 
 ---
 
-### 工具权限分配
+## 工具权限分配
 
-| Agent | allowed-tools | Bash 使用场景（如有）|
-|-------|-------------|-------------------|
-| file-analyzer | Read, Glob, Bash | 仅限只读命令：`ls`、`find`、`cat`、`head`、`tail`、`wc`、`tree`、`file`。禁止任何写入/网络/执行命令 |
-| content-writer | Read, Edit, Write | — |
-| exercise-designer | Read, Edit, Write | — |
-| content-reviewer | Read, Edit, Write | — |
-| assembler | Read, Edit, Write | — |
+| Agent | allowed-tools | Bash 使用场景 |
+|-------|--------------|---------------|
+| **domain-researcher** | Read, WebSearch, WebFetch | — |
+| **learning-roadmap-planner** | Read, Write, WebSearch, WebFetch | — |
 
-**Bash 权限说明**：
-- `file-analyzer` 需要 Bash 来执行目录扫描命令（`find`, `tree`, `ls` 等）
-- 这些命令必须在提示词中明确限制为只读操作
-- 提示词中必须包含命令白名单，禁止 `rm`, `mv`, `cp`, `chmod`, `curl`, `wget`, `npm`, `pip` 等危险命令
+### 工具权限说明
+
+| 工具 | domain-researcher | learning-roadmap-planner | 使用场景说明 |
+|-----|------------------|-------------------------|-------------|
+| `Read` | 读取需求文件、上游输出 | 读取需求文件、领域知识 | 基础只读操作 |
+| `WebSearch` | 搜索低空经济政策、TSP 文献 | 搜索课程资源、GitHub 仓库 | 网络信息检索 |
+| `WebFetch` | 抓取行业报告全文 | 抓取课程详情、论文摘要 | 深入获取网页内容 |
+| `Write` | — | 输出最终学习路线文档 | 创建最终交付物 |
+
+**Bash 不需要**：本 Team 所有操作均可通过内置工具完成，无需执行外部命令。
 
 ---
 
-### Skill 需求 + 搜索提示（供 Library Scout 使用）
+## Skill 需求 + 搜索提示
 
-| 需求描述 | 搜索关键词（英文） | 使用的 Agent | 备注 |
-|---------|------------------|------------|------|
-| 项目结构分析 | project structure, file analyzer, code scanner | file-analyzer | 可能不需要独立 skill，Bash 命令即可 |
-| 教程内容编写 | tutorial writer, documentation generator, content creator | content-writer | 可能不需要独立 skill，LLM 内置能力 |
-| 练习题设计 | exercise designer, quiz generator, practice questions | exercise-designer | 可能不需要独立 skill，LLM 内置能力 |
-| 内容审查 | document review, content reviewer, quality checker | content-reviewer | document-review skill 已存在，可参考其审查逻辑 |
-| 自我改进 | self improving, memory management, learning | 所有 agent | self-improving-agent skill 已存在，直接复用 |
+### 可复用 Skill 清单
+
+| 需求描述 | 搜索关键词 | 使用的 Agent | 候选 Skill | 安装量 | 推荐度 |
+|---------|-----------|-------------|-----------|--------|-------|
+| 系统性网络研究 | web research | domain-researcher | `langchain-ai/deepagents@web-research` | 941 | ★★★★★ |
+| 学术文献研究 | academic research | domain-researcher | `shubhamsaboo/awesome-llm-apps@academic-researcher` | 2.1K | ★★★★★ |
+| GitHub 代码搜索 | github search | learning-roadmap-planner | `parcadei/continuous-claude-v3@github-search` | 316 | ★★★★☆ |
+| 学习路径设计 | learning path | learning-roadmap-planner | `rysweet/amplihack@learning-path-builder` | 134 | ★★★★☆ |
+
+### Skill 决策建议
+
+**domain-researcher** 建议安装：
+- `langchain-ai/deepagents@web-research` — 系统性网络研究流程
+- `shubhamsaboo/awesome-llm-apps@academic-researcher` — 学术研究方法论
+
+**learning-roadmap-planner** 建议安装：
+- `rysweet/amplihack@learning-path-builder` — 学习路径结构化设计
+
+**可选**（GitHub MCP 未配置时）：
+- `parcadei/continuous-claude-v3@github-search` — 通过 WebSearch 增强 GitHub 搜索能力
 
 ### Agent 搜索提示（供 Library Scout 使用）
 
-| 目标 Agent | 搜索关键词（英文） | 期望的核心能力 |
-|-----------|------------------|--------------|
-| file-analyzer | codebase scanner, project analyzer | 识别项目结构、入口文件、依赖关系 |
-| content-writer | technical writer, documentation agent | 编写技术教程、代码示例 |
-| exercise-designer | quiz generator, exercise creator | 设计编程练习题 |
-| content-reviewer | document reviewer, quality auditor | 审查文档完整性、准确性 |
-
-### Skill 复用决策
-
-| Skill | 来源 | 处理方式 |
-|-------|-----|---------|
-| self-improving-agent | `~/.claude/skills/self-improving-agent/` | **直接复用** — 已安装，复制到输出目录 `.claude/skills/` |
-| document-review | `~/.claude/skills/document-review/` | **参考逻辑** — 不直接安装，content-reviewer 可参考其审查流程 |
-
-### 需原创的 Skill
-
-**无** — 本 team 不需要原创 skill。所有功能可由 agent 内置能力 + self-improving-agent 实现。
+| 目标 Agent | 搜索关键词 | 期望的核心能力 |
+|-----------|-----------|--------------|
+| domain-researcher | academic researcher, domain expert, knowledge graph | 领域知识调研、文献综述、知识图谱构建 |
+| learning-roadmap-planner | learning path, curriculum designer, education planner | 学习路径设计、资源整合、时间规划 |
 
 ---
 
-### MCP 集成配置
+## 需原创的 Skill
 
-**无 MCP 需求**
+**结论：无需原创 Skill**
 
-本 team 为纯本地文件操作，不需要外部 API 或数据库连接。
+理由：
+1. `web-research` 和 `academic-researcher` 已有成熟方案，直接安装
+2. `learning-path-builder` 可满足学习路径设计需求
+3. 本 Team 核心是信息检索与整合，不涉及特殊业务逻辑
 
 ---
 
-### Workspace 文件协议
+## MCP 集成配置
+
+### 推荐配置（可选）
+
+`.claude/settings.json` 配置段：
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/mcp-server-github"],
+      "env": {
+        "GITHUB_TOKEN": "请填入"
+      }
+    }
+  }
+}
+```
+
+### MCP 需求表
+
+| MCP | 使用的 Agent | 需要的 Token | 获取方式 |
+|-----|------------|-------------|---------|
+| GitHub（可选） | learning-roadmap-planner | GITHUB_TOKEN | https://github.com/settings/tokens |
+
+### 降级策略
+
+如果 GitHub MCP 未配置：
+1. `learning-roadmap-planner` 使用 `WebSearch` 搜索 `github.com` 上的相关仓库
+2. 使用 `WebFetch` 获取仓库详情（README、星标数、最近更新）
+3. 功能完整度约 80%，满足基本需求
+
+---
+
+## Hook 配置
+
+**Profile 级别**：minimal
+
+### 标准 Hook（minimal 级别）
+
+| 脚本 | 事件 | Profile | 实现要点 |
+|------|------|---------|---------|
+| `pre-tool-safety.js` | PreToolUse(Bash) | minimal+ | 阻止 `rm -rf /`、硬编码凭证、`eval` 注入 |
+
+**说明**：minimal 级别仅启用安全检查 hook。由于本 Team 无 Bash 权限，hook 主要作为防护层。
+
+### settings.json hooks 配置段
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{
+        "type": "command",
+        "command": "node scripts/hooks/pre-tool-safety.js",
+        "timeout": 5
+      }]
+    }]
+  }
+}
+```
+
+### 自定义 Hook
+
+**无需自定义 Hook**
+
+理由：
+1. 本 Team 无 Bash 权限，无需额外安全限制
+2. 无共享文件写入冲突风险
+3. 任务性质为一次性文档生成，无需会话摘要
+
+---
+
+## Workspace 文件协议
+
+### 文件清单
 
 | 文件 | 写入者 | 读取者 | 格式说明 |
 |-----|-------|-------|---------|
-| `project-structure.md` | file-analyzer | content-writer | Markdown 格式，包含项目入口、模块结构、依赖关系 |
-| `tutorial-content.md` | content-writer | exercise-designer, content-reviewer, assembler | Markdown 格式，章节式教程正文 |
-| `exercises.md` | exercise-designer | content-reviewer, assembler | Markdown 格式，按章节划分的练习题 |
-| `review-feedback.md` | content-reviewer | content-writer, assembler | Markdown 格式，问题列表 + 修改建议 |
-| `review-round.txt` | content-reviewer | content-reviewer | 单行数字，初始 `0`，每次反馈循环 +1 |
-| `final-tutorial.md` | assembler | 无（最终输出） | Markdown 格式，组装后的完整教程 |
+| `phase-0-requirements.md` | director-council | domain-researcher, learning-roadmap-planner | 需求文档（只读） |
+| `domain-knowledge.md` | domain-researcher | learning-roadmap-planner | Markdown 结构化知识图谱 |
+| `learning-roadmap.md` | learning-roadmap-planner | 用户（最终交付） | Markdown 学习路线文档 |
 
-**传递顺序**：
+### 传递顺序
+
 ```
-file-analyzer → project-structure.md → content-writer → tutorial-content.md
-    → exercise-designer → exercises.md → content-reviewer
-    → [review-feedback.md → content-writer（修改）→ ...]（最多2轮）
-    → assembler → final-tutorial.md
+phase-0-requirements.md
+         │
+         ├──────────────────────────┐
+         ▼                          ▼
+  domain-researcher          learning-roadmap-planner
+   (context: fork)              (等待上游)
+         │                          │
+         ▼                          │
+   domain-knowledge.md ────────────┘
+                                   │
+                                   ▼
+                         learning-roadmap.md → 最终交付
 ```
 
----
+### 文件格式规范
 
-### 初始化步骤
-
-在 CLAUDE.md 工作流程开头必须包含：
-
+**domain-knowledge.md** 结构：
 ```markdown
-## 初始化
+# 领域知识图谱
 
-1. 检查 `.claude/workspace/` 目录是否存在，不存在则创建
-2. 检查 `.claude/workspace/review-round.txt` 是否存在，不存在则写入 `0`
+## 低空经济
+- 政策框架
+- 产业现状
+- 研究热点
+
+## TSP 问题
+- 经典变体
+- 算法演进
+- 近期突破
+
+## 路线规划（低空场景）
+- 特殊约束
+- 应用场景
+- 研究空白
+
+## 研究热点矩阵
+| 方向 | 成熟度 | 创新空间 | 推荐度 |
+|-----|-------|---------|-------|
 ```
 
----
-
-### 反馈循环技术实现
-
-#### review-round.txt 管理
-
-**位置**：`.claude/workspace/review-round.txt`
-
-**初始化**：由用户或 file-analyzer 在首次运行前创建，内容为 `0`
-
-**读写逻辑**：
-
+**learning-roadmap.md** 结构：
 ```markdown
-## content-reviewer 反馈循环逻辑
+# 低空经济研究方向学习路线
 
-1. 读取 `.claude/workspace/review-round.txt`，获取当前轮次（整数）
-2. 执行审查，将结果写入 `review-feedback.md`
-3. 如果发现问题且当前轮次 < 2：
-   - 在 `review-feedback.md` 顶部添加 `STATUS: NEEDS_REVISION`
-   - 将 `review-round.txt` 内容 +1
-   - 通知用户：需要修改，进入第 N+1 轮
-4. 如果通过 或 当前轮次 >= 2：
-   - 在 `review-feedback.md` 顶部添加 `STATUS: APPROVED`
-   - 进入 assembler 阶段
-```
+## 1. 领域知识概览
+## 2. 学习路径设计
+### 2.1 课程轨道
+### 2.2 文献轨道
+### 2.3 实践轨道
+## 3. 资源清单
+### 3.1 GitHub 代码
+### 3.2 学术论文
+### 3.3 课程资源
+## 4. 时间规划
+## 5. 研究切入点建议
 
-**content-writer 修改流程**：
-
-```markdown
-## content-writer 处理反馈
-
-1. 检查 `review-feedback.md` 是否存在且 STATUS 为 `NEEDS_REVISION`
-2. 读取反馈内容，修改 `tutorial-content.md`
-3. 修改完成后，在 `tutorial-content.md` 底部添加修改时间戳
+---
+**生成时间**：[timestamp]
+**风险提示**：半年内从新手到 SCI 一区难度极高，建议...
 ```
 
 ---
 
-### Bash 命令白名单（file-analyzer）
+## 辅助脚本需求
 
-允许的命令：
-- `ls [-la] [path]` — 列出目录内容
-- `find [path] [-name] [-type]` — 查找文件
-- `cat [file]` — 查看文件内容
-- `head [-n] [file]` — 查看文件开头
-- `tail [-n] [file]` — 查看文件结尾
-- `wc [-l] [file]` — 统计行数
-- `tree [-L] [path]` — 显示目录树
-- `file [file]` — 检测文件类型
-- `pwd` — 显示当前目录
+**无需辅助脚本**
 
-禁止的命令：
-- 任何写入命令：`rm`, `mv`, `cp`, `mkdir`, `touch`, `chmod`, `chown`
-- 任何网络命令：`curl`, `wget`, `nc`, `ssh`, `scp`
-- 任何执行命令：`npm`, `pip`, `python`, `node`, `bash`（脚本执行）
-- 任何环境操作：`export`, `source`, `eval`
+理由：
+1. 无需执行外部命令（无 Bash 权限）
+2. 所有数据处理由 agent 内置能力完成
+3. 输出为纯 Markdown，无需格式转换
 
 ---
 
-### 辅助脚本需求
+## 与 Visionary-UX 的注意点
 
-| 脚本 | 用途 | 调用方 |
-|-----|------|-------|
-| 无 | 本 team 不需要独立辅助脚本 | — |
+### 工具权限与 Prompt 设计的配合
 
-**说明**：file-analyzer 的 Bash 命令直接在提示词中定义白名单，不需要独立脚本。
+| Agent | 工具约束 | UX Prompt 需要说明 |
+|-------|---------|------------------|
+| domain-researcher | 无 Write 权限 | 在 prompt 中明确输出到 `domain-knowledge.md`，而非直接返回 |
+| learning-roadmap-planner | 有 Write 权限 | 使用 `Write` 工具创建 `learning-roadmap.md`，确保原子写入 |
 
----
+### Fork Agent 的 Prompt 设计
 
-### 与 Visionary-UX 的注意点
+`domain-researcher` 使用 `context: fork`，UX 设计需：
+1. 明确告知其独立运行，不等待其他 agent
+2. 输出文件名固定为 `domain-knowledge.md`
+3. Prompt 中包含「完成后立即写入，无需等待确认」的指令
 
-1. **file-analyzer 的 Bash 限制**：UX 设计提示词时必须在「工具使用说明」部分明确列出允许的命令白名单，并在「禁止事项」中强调不可执行的命令类型。
+### 等待逻辑的 Prompt 设计
 
-2. **content-reviewer 的审查标准**：需要 UX 定义具体的审查维度：
-   - 完整性：是否覆盖项目核心功能
-   - 准确性：代码示例是否可运行
-   - 连贯性：章节之间是否有逻辑衔接
-   - 可操作性：练习题是否与教程内容匹配
-
-3. **feedback 文件格式**：建议 UX 定义 `review-feedback.md` 的标准模板：
-   ```markdown
-   # 审查反馈
-
-   STATUS: [NEEDS_REVISION | APPROVED]
-   ROUND: [当前轮次]
-
-   ## 问题列表
-   1. [问题描述] — 所在章节：[章节名]
-   2. ...
-
-   ## 修改建议
-   1. [具体建议]
-   2. ...
-
-   ## 通过项
-   - [做得好的部分]
-   ```
-
-4. **assembler 的组装顺序**：需要 UX 定义最终文档的结构模板，确保内容顺序合理。
+`learning-roadmap-planner` 需等待上游，UX 设计需：
+1. 启动时检查 `domain-knowledge.md` 是否存在
+2. 若不存在，提示用户先运行 `domain-researcher`
+3. 读取后继续执行，不阻塞
 
 ---
 
-### 安全考虑
+## Skill 安装命令（供 toolsmith-skills 使用）
 
-| 风险点 | 缓解措施 |
-|-------|---------|
-| file-analyzer Bash 权限滥用 | 提示词中明确定义命令白名单，禁止危险命令 |
-| 路径遍历攻击 | file-analyzer 只能扫描用户提供的项目目录，不得读取系统敏感路径 |
-| 无限反馈循环 | review-round.txt 限制最多 2 轮，第 3 轮自动通过 |
-| 文件写入覆盖 | 使用 Edit 替代 Write，减少全量覆盖风险 |
+```bash
+# 必装（domain-researcher）
+npx skills add langchain-ai/deepagents@web-research
+npx skills add shubhamsaboo/awesome-llm-apps@academic-researcher
+
+# 必装（learning-roadmap-planner）
+npx skills add rysweet/amplihack@learning-path-builder
+
+# 可选（GitHub MCP 替代方案）
+npx skills add parcadei/continuous-claude-v3@github-search
+```
 
 ---
 
-### 版本兼容性
+## 技术风险与缓解
 
-| 依赖项 | 版本要求 | 说明 |
-|-------|---------|------|
-| self-improving-agent | 已安装版本 | 无特定版本要求 |
-| Claude Code | v2.1.32+ | 支持 auto-memory 功能 |
-| Bash 环境 | 任意 | 仅使用基础命令 |
+| 风险 | 影响 | 缓解措施 |
+|-----|------|---------|
+| Skill 安装失败 | 部分功能降级 | 使用内置 WebSearch + WebFetch 替代 |
+| GitHub MCP 未配置 | 代码搜索能力受限 | 降级为 WebSearch 搜索 github.com |
+| WebSearch API 限制 | 信息检索中断 | 分批检索，使用 WebFetch 补充详情 |
+
+---
+
+## 完成检查清单
+
+- [x] 工具权限分配完成（2 个 agent）
+- [x] Skill 搜索完成，找到 4 个候选
+- [x] MCP 配置设计完成（GitHub 可选）
+- [x] Hook 配置设计完成（minimal 级别）
+- [x] Workspace 文件协议设计完成
+- [x] 与 UX 的注意点标注完成

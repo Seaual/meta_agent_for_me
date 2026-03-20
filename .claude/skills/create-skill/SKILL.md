@@ -1,19 +1,43 @@
 ---
 name: create-skill
 description: |
-  Activate when a new skill needs to be created from scratch, or when adapting an
-  agency-agents agent's Process/Deliverables sections into a skill format.
+  Create new skills, modify and improve existing skills, and measure skill performance.
+  Use when users want to create a skill from scratch, edit, or optimize an existing skill,
+  run evals to test a skill, benchmark skill performance with variance analysis,
+  or optimize a skill's description for better triggering accuracy.
+
+  Also handles adapting agency-agents agent's Process/Deliverables sections into skill format.
   Use after find-skill confirms no suitable skill exists.
   Triggers on: "create skill", "新建skill", "创建技能", "make a skill for",
-  "写一个skill来做X", "build skill", "skill不存在需要新建", "从零创建skill".
+  "写一个skill来做X", "build skill", "skill不存在需要新建", "从零创建skill",
+  "improve skill", "优化skill", "test skill", "eval skill".
   Do NOT use if a suitable skill already exists (run find-skill first to check).
-allowed-tools: Read, Write, Edit, Bash, Glob
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-# Skill: Create Skill — 技能锻造炉
+# Create Skill — 技能锻造炉
 
-## 概述
-从零创建一个全新的 `SKILL.md`，或将 agency-agents 仓库中某个 agent 的执行逻辑（Process / Deliverables）改编为 skill 格式。
+A skill for creating new skills and iteratively improving them.
+
+At a high level, the process of creating a skill goes like this:
+
+- Decide what you want the skill to do and roughly how it should do it
+- Write a draft of the skill
+- Create a few test prompts and run claude-with-access-to-the-skill on them
+- Help the user evaluate the results both qualitatively and quantitatively
+  - While the runs happen in the background, draft some quantitative evals if there aren't any (if there are some, you can either use as is or modify if you feel something needs to change about them). Then explain them to the user (or if they already existed, explain the ones that already exist)
+  - Use the `eval-viewer/generate_review.py` script to show the user the results for them to look at, and also let them look at the quantitative metrics
+- Rewrite the skill based on feedback from the user's evaluation of the results (and also if there are any glaring flaws that become apparent from the quantitative benchmarks)
+- Repeat until you're satisfied
+- Expand the test set and try again at larger scale
+
+Your job when using this skill is to figure out where the user is in this process and then jump in and help them progress through these stages. So for instance, maybe they're like "I want to make a skill for X". You can help narrow down what they mean, write a draft, write the test cases, figure out how they want to evaluate, run all the prompts, and repeat.
+
+On the other hand, maybe they already have a draft of the skill. In this case you can go straight to the eval/iterate part of the loop.
+
+Of course, you should always be flexible and if the user is like "I don't need to run a bunch of evaluations, just vibe with me", you can do that instead.
+
+Then after the skill is done (but again, the order is flexible), you can also run the skill description improver, which we have a whole separate script for, to optimize the triggering of the skill.
 
 ---
 
@@ -71,12 +95,6 @@ cat "$AGENT_FILE"
 
 ### Step 2：生成改编后的 SKILL.md
 
-```bash
-SKILL_NAME="[改编后的 skill 名称]"
-SKILL_DIR=".claude/skills/$SKILL_NAME"
-mkdir -p "$SKILL_DIR"
-```
-
 在 frontmatter 中注明来源：
 ```yaml
 ---
@@ -125,11 +143,6 @@ cat ~/.claude/settings.json 2>/dev/null \
   | grep -A5 '"mcpServers"' \
   | grep '"name"\|"command"' \
   || echo "（未找到 MCP 配置，或路径不同）"
-
-# 也可以检查项目级配置
-cat .claude/settings.json 2>/dev/null \
-  | grep -A5 '"mcpServers"' \
-  || echo "（无项目级 MCP 配置）"
 ```
 
 **常见 MCP 需求映射**：
@@ -144,22 +157,7 @@ cat .claude/settings.json 2>/dev/null \
 | 运行 Python 代码 | 无需 MCP（用 Bash） | — |
 | 发送 Slack 消息 | `@modelcontextprotocol/server-slack` | `"slack"` |
 
-如果需要 MCP 但尚未配置，在输出中告知用户：
-```markdown
-⚠️  此 skill 需要 MCP：[mcp-name]
-配置方式（添加到 ~/.claude/settings.json）：
-\`\`\`json
-{
-  "mcpServers": {
-    "[mcp-name]": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/mcp-server-[name]"]
-    }
-  }
-}
-\`\`\`
-配置完成后，skill 中的工具调用即可生效。
-```
+如果需要 MCP 但尚未配置，在输出中告知用户配置方式。
 
 ### Step 3：步骤设计原则
 
@@ -174,18 +172,7 @@ cat .claude/settings.json 2>/dev/null \
 步骤输出：这步完成后产出什么
 ```
 
-**步骤数量参考**：
-- 简单 skill（单一功能）：3-4 步
-- 中等 skill（有判断分支）：5-6 步
-- 复杂 skill（多阶段流程）：7 步上限（超过则考虑拆分）
-
 ### Step 4：生成完整 SKILL.md
-
-```bash
-SKILL_NAME="[kebab-case-name]"
-SKILL_DIR=".claude/skills/$SKILL_NAME"
-mkdir -p "$SKILL_DIR"
-```
 
 **完整模板**：
 
@@ -256,13 +243,6 @@ grep -q "^name:"          "$SKILL_FILE" && echo "✅ name"          || echo "�
 grep -q "^description:"   "$SKILL_FILE" && echo "✅ description"   || echo "🔴 缺少 description"
 grep -q "^allowed-tools:" "$SKILL_FILE" && echo "✅ allowed-tools" || echo "🔴 缺少 allowed-tools"
 
-# description 长度
-lines=$(awk '/^description:/,/^[a-z][^:]*:/' "$SKILL_FILE" \
-  | grep -v "^description:\|^allowed\|^name\|^context\|^---" | wc -l)
-[ "$lines" -ge 3 ] \
-  && echo "✅ description 长度 ($lines 行)" \
-  || echo "🟡 description 偏短 ($lines 行，建议 3+ 行)"
-
 # 使用示例
 grep -q "使用示例\|Example" "$SKILL_FILE" \
   && echo "✅ 有使用示例" || echo "🟡 建议添加使用示例"
@@ -273,30 +253,176 @@ echo "=== 自检完成 ==="
 
 ---
 
-## 输出汇报格式
+## 测试与评估
 
-```markdown
-## ✅ Skill 创建完成
+此部分用于验证 skill 质量并迭代改进。
 
-**名称**：[skill-name]
-**路径**：`.claude/skills/[name]/SKILL.md`
-**创建方式**：从零原创 / 改编自 agency-agents/[path]
-**需要 MCP**：[无 / [mcp-name]（配置说明见上方）]
+### 运行测试用例
 
-### 触发测试
-应触发：
-- ✅ 「[触发语句 1]」
-- ✅ 「[触发语句 2]」
+Put results in `<skill-name>-workspace/` as a sibling to the skill directory. Within the workspace, organize results by iteration (`iteration-1/`, `iteration-2/`, etc.) and within that, each test case gets a directory (`eval-0/`, `eval-1/`, etc.).
 
-不应触发：
-- ❌ 「[排除语句]」（会触发 [其他 skill/agent]）
+### Step 1：Spawn all runs (with-skill AND baseline) in the same turn
 
-### 部署
-\`\`\`bash
-# 全局安装
-cp -r .claude/skills/[name]/ ~/.claude/skills/
+For each test case, spawn two subagents in the same turn — one with the skill, one without. This is important: don't spawn the with-skill runs first and then come back for baselines later. Launch everything at once so it all finishes around the same time.
 
-# 仅当前项目
-# 已在 .claude/skills/[name]/ 就位，无需操作
-\`\`\`
+**With-skill run:**
+
 ```
+Execute this task:
+- Skill path: <path-to-skill>
+- Task: <eval prompt>
+- Input files: <eval files if any, or "none">
+- Save outputs to: <workspace>/iteration-<N>/eval-<ID>/with_skill/outputs/
+- Outputs to save: <what the user cares about — e.g., "the .docx file", "the final CSV">
+```
+
+**Baseline run** (same prompt, but the baseline depends on context):
+- **Creating a new skill**: no skill at all. Same prompt, no skill path, save to `without_skill/outputs/`.
+- **Improving an existing skill**: the old version. Before editing, snapshot the skill (`cp -r <skill-path> <workspace>/skill-snapshot/`), then point the baseline subagent at the snapshot. Save to `old_skill/outputs/`.
+
+### Step 2：While runs are in progress, draft assertions
+
+Don't just wait for the runs to finish — you can use this time productively. Draft quantitative assertions for each test case and explain them to the user.
+
+Good assertions are objectively verifiable and have descriptive names — they should read clearly in the benchmark viewer.
+
+### Step 3：Grade, aggregate, and launch the viewer
+
+Once all runs are done:
+
+1. **Grade each run** — spawn a grader subagent (or grade inline) that reads `agents/grader.md` and evaluates each assertion against the outputs.
+
+2. **Aggregate into benchmark** — run the aggregation script:
+   ```bash
+   python -m scripts.aggregate_benchmark <workspace>/iteration-N --skill-name <name>
+   ```
+
+3. **Launch the viewer**:
+   ```bash
+   python eval-viewer/generate_review.py \
+     <workspace>/iteration-N \
+     --skill-name "my-skill" \
+     --benchmark <workspace>/iteration-N/benchmark.json
+   ```
+
+   **Headless environments:** Use `--static <output_path>` to write a standalone HTML file.
+
+### Step 4：Read the feedback
+
+When the user tells you they're done, read `feedback.json`:
+
+```json
+{
+  "reviews": [
+    {"run_id": "eval-0-with_skill", "feedback": "the chart is missing axis labels", "timestamp": "..."},
+    {"run_id": "eval-1-with_skill", "feedback": "", "timestamp": "..."}
+  ],
+  "status": "complete"
+}
+```
+
+Empty feedback means the user thought it was fine. Focus your improvements on the test cases where the user had specific complaints.
+
+---
+
+## 迭代改进
+
+This is the heart of the loop. You've run the test cases, the user has reviewed the results, and now you need to make the skill better based on their feedback.
+
+### How to think about improvements
+
+1. **Generalize from the feedback.** Don't put in fiddly overfitty changes. Try branching out and using different metaphors.
+
+2. **Keep the prompt lean.** Remove things that aren't pulling their weight.
+
+3. **Explain the why.** Try hard to explain the **why** behind everything you're asking the model to do.
+
+4. **Look for repeated work across test cases.** If all test cases resulted in similar helper scripts, that's a strong signal the skill should bundle that script.
+
+### The iteration loop
+
+After improving the skill:
+
+1. Apply your improvements to the skill
+2. Rerun all test cases into a new `iteration-<N+1>/` directory
+3. Launch the reviewer with `--previous-workspace`
+4. Wait for the user to review
+5. Read the new feedback, improve again, repeat
+
+Keep going until:
+- The user says they're happy
+- The feedback is all empty (everything looks good)
+- You're not making meaningful progress
+
+---
+
+## Description 优化
+
+The description field in SKILL.md frontmatter is the primary mechanism that determines whether Claude invokes a skill.
+
+### Step 1：Generate trigger eval queries
+
+Create 20 eval queries — a mix of should-trigger and should-not-trigger:
+
+```json
+[
+  {"query": "the user prompt", "should_trigger": true},
+  {"query": "another prompt", "should_trigger": false}
+]
+```
+
+### Step 2：Review with user
+
+Present the eval set to the user for review using `assets/eval_review.html`.
+
+### Step 3：Run the optimization loop
+
+```bash
+python -m scripts.run_loop \
+  --eval-set <path-to-trigger-eval.json> \
+  --skill-path <path-to-skill> \
+  --model <model-id> \
+  --max-iterations 5 \
+  --verbose
+```
+
+### Step 4：Apply the result
+
+Take `best_description` from the JSON output and update the skill's SKILL.md frontmatter.
+
+---
+
+## 打包
+
+Check whether you have access to the `present_files` tool. If you do, package the skill:
+
+```bash
+python -m scripts.package_skill <path/to/skill-folder>
+```
+
+After packaging, direct the user to the resulting `.skill` file path.
+
+---
+
+## 参考文件
+
+The `agents/` directory contains instructions for specialized subagents:
+- `agents/grader.md` — How to evaluate assertions against outputs
+- `agents/comparator.md` — How to do blind A/B comparison between two outputs
+- `agents/analyzer.md` — How to analyze why one version beat another
+
+The `references/` directory has additional documentation:
+- `references/schemas.md` — JSON structures for evals.json, grading.json, etc.
+
+---
+
+## 核心循环总结
+
+- Figure out what the skill is about
+- Draft or edit the skill
+- Run claude-with-access-to-the-skill on test prompts
+- With the user, evaluate the outputs:
+  - Create benchmark.json and run `eval-viewer/generate_review.py`
+  - Run quantitative evals
+- Repeat until you and the user are satisfied
+- Package the final skill and return it to the user

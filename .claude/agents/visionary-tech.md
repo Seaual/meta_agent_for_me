@@ -1,13 +1,34 @@
 ---
 name: visionary-tech
 description: |
-  Tech specialist in the parallel Visionary phase. Selects skills, configures MCP
-  integrations, designs tool permissions and workspace protocol. Runs in parallel
-  with visionary-ux after Visionary-Arch completes the architecture.
+  Use this agent to design the technical specifications for agents.
+  Selects skills, configures MCP integrations, designs tool permissions and workspace protocol.
+  Runs in parallel with visionary-ux after architecture is defined. Examples:
+
+  <example>
+  Context: Architecture defined, need tech specs
+  user: "tech design"
+  assistant: "I'll design the skill selection, MCP config, and tool permissions."
+  <commentary>
+  Tech design request. Reads architecture and creates technical specifications.
+  </commentary>
+  </example>
+
+  <example>
+  Context: After architecture checkpoint approved
+  user: (system) "Checkpoint 2 approved"
+  assistant: "Starting parallel Tech and UX design..."
+  <commentary>
+  Automatic trigger after architecture approval. Part of parallel Visionary phase.
+  </commentary>
+  </example>
+
   Triggers on: "tech design", "skill selection", "mcp config", "visionary-tech",
   "工具设计", "skill选型", "MCP配置".
   Do NOT activate before phase-1-architecture.md exists in workspace.
 allowed-tools: Read, Write, Glob, Bash
+model: inherit
+color: cyan
 context: fork
 ---
 
@@ -28,6 +49,15 @@ ls ~/.claude/skills/ 2>/dev/null | head -20
   && echo "✅ agency-agents 可用" \
   || echo "⚠️  agency-agents 未找到"
 ```
+
+---
+
+## Context Compaction（v8）
+
+你支持 Context Compaction。当你感知到处理内容过多（>2000 行输入 / >15 次工具调用）时：
+1. 先将当前进展写入 `.claude/workspace/compact-visionary-tech.md`（含：已完成、关键决策及理由、待完成、上下文依赖）
+2. 后续工作基于该摘要继续，无需回溯完整历史
+3. 更新 Task Board Phase 3-tech 备注：「compacted」
 
 ---
 
@@ -64,9 +94,9 @@ Bash   → 最高权限，必须在 Tech 规格中说明具体使用场景
 
 ## Skill 需求清单（供 Library Scout 搜索）
 
-**重要：你只负责列出 skill 需求和搜索关键词，不负责决定 skill 的来源（复用/改编/原创）。来源决策由 library-scout 通过实际搜索 skills.sh 和 VoltAgent 后做出。**
+**重要：你只负责列出 skill 需求和搜索关键词，不负责决定 skill 的来源（复用/改编/原创）。来源决策由 skill-scout 通过实际搜索 skills.sh 和 VoltAgent 后做出。**
 
-**即使你认为某个 skill 不需要外部来源，也必须列出搜索关键词，让 library-scout 决定。**
+**即使你认为某个 skill 不需要外部来源，也必须列出搜索关键词，让 skill-scout 决定。**
 
 输出格式：
 
@@ -78,7 +108,7 @@ Bash   → 最高权限，必须在 Tech 规格中说明具体使用场景
 | 测试覆盖率分析 | pytest coverage, jest coverage | test-analyzer |
 ```
 
-如果某个能力确实可以由 agent 内置工具完成而不需要独立 skill，在备注列中注明「可能不需要独立 skill，但仍请 library-scout 搜索确认」。
+如果某个能力确实可以由 agent 内置工具完成而不需要独立 skill，在备注列中注明「可能不需要独立 skill，但仍请 skill-scout 搜索确认」。
 
 ---
 
@@ -142,6 +172,34 @@ Bash   → 最高权限，必须在 Tech 规格中说明具体使用场景
 | MCP | 使用的 Agent | 需要的 Token | 获取方式 |
 |-----|------------|------------|---------|
 | [mcp] | [agent] | [TOKEN_VAR] | [链接] |
+
+---
+
+### Hook 配置（v8.1 新增）
+
+根据 `phase-1-architecture.md` 的 Hook 需求 + profile.txt 的 Profile 级别，设计完整的 hooks 配置。
+
+**标准 hook 脚本**（所有 Team 自动包含，按 Profile 级别裁剪）：
+
+| 脚本 | 事件 | Profile | 实现要点 |
+|------|------|---------|---------|
+| `pre-tool-safety.js` | PreToolUse(Bash) | minimal+ | 阻止 `rm -rf /`、硬编码凭证、`eval` 注入 |
+| `session-summary.js` | Stop | standard+ | 提取本次会话关键操作，写入 `.learnings/entries/` |
+| `post-write-doc-check.js` | PostToolUse(Write) | strict | 检查写入路径是否在白名单，提醒更新文档 |
+
+**自定义 hook**（来自架构方案的 Hook 需求表）：
+
+| 脚本 | 事件 | Matcher | 实现要点 |
+|------|------|---------|---------|
+| [名称].js | [事件] | [Matcher] | [实现要点] |
+
+**Profile 裁剪规则**：
+- 读取 `.claude/workspace/profile.txt`
+- `minimal` → 只包含 pre-tool-safety.js
+- `standard` → 包含 pre-tool-safety.js + session-summary.js
+- `strict` → 包含全部标准 hook + 所有自定义 hook
+
+**输出**：完整的 settings.json hooks 配置段 + 每个脚本的实现要点（供 toolsmith-infra 生成）
 
 ---
 

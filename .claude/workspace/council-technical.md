@@ -1,55 +1,70 @@
-# Technical 视角分析
+# Council Technical Analysis
 
 ## 分解策略
 
 **选用策略**：按职能分解
-**选择理由**：教程生成涉及独立的职能环节（分析、写作、设计练习、审查、组装），各职能专业度差异大，适合独立 agent 负责。
+
+**选择理由**：
+1. 学习路线规划任务天然按职能分工：研究 → 设计 → 搜集 → 规划 → 汇总
+2. 各职能相对独立，输入输出边界清晰，便于并行执行
+3. 用户时间紧迫，职能分解可最大化并行效率
 
 ---
 
-## Agent 职责矩阵草案
+## Agent 职责矩阵
 
 | Agent | 核心职责 | 输入 | 输出 | 工具权限 | Fork? |
 |-------|---------|------|------|---------|-------|
-| file-analyzer | 扫描项目目录，识别代码结构 | 项目路径 | project-structure.md | Read, Bash | no |
-| content-writer | 编写教程正文（分步指南+代码示例） | project-structure.md | tutorial-content.md | Read, Write | no |
-| exercise-designer | 设计练习题 | tutorial-content.md | exercises.md | Read, Write | no |
-| content-reviewer | 审查完整性和准确性 | tutorial-content.md, exercises.md | review-feedback.md | Read, Write | no |
-| assembler | 组装最终教程文档 | tutorial-content.md, exercises.md | final-tutorial.md | Read, Write | no |
+| `domain-researcher` | 低空经济领域概览 + TSP/路线规划核心概念研究 | `phase-0-requirements.md` | `domain-knowledge.md` | Read, Grep, Glob, WebSearch | yes |
+| `resource-scout` | GitHub 开源代码 + 学术文献搜索 | `phase-0-requirements.md` | `resources-collected.md` | Read, WebSearch, WebFetch | yes |
+| `learning-planner` | 学习路径设计（课程/文献/实践三轨） | `domain-knowledge.md`, `resources-collected.md` | `learning-path.md` | Read, Write, Grep | no |
+| `timeline-architect` | 时间规划（里程碑 + 截止日期 + 每日任务） | `learning-path.md` | `timeline.md` | Read, Write | no |
+| `route-coordinator` | 综合汇总 + Markdown 最终文档 | 所有上游输出 | `learning-roadmap.md` (最终) | Read, Write, Grep | no |
 
 ---
 
 ## 协作拓扑
 
 ```
-                    ┌─────────────────┐
-                    │ file-analyzer   │
-                    └────────┬────────┘
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │ content-writer  │◄─────────────────┐
-                    └────────┬────────┘                  │
-                             │                           │
-                             ▼                           │
-                 ┌─────────────────────┐                 │
-                 │ exercise-designer   │                 │
-                 └──────────┬──────────┘                 │
-                            │                            │
-                            ▼                            │
-                 ┌─────────────────────┐                 │
-                 │  content-reviewer   │─────────────────┤
-                 └──────────┬──────────┘      (反馈循环)  │
-                            │ (最多2轮通过)               │
-                            ▼                            │
-                 ┌─────────────────────┐                 │
-                 │     assembler       │                 │
-                 └─────────────────────┘                 │
+                    phase-0-requirements.md
+                            │
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+    ┌──────────────────┐       ┌──────────────────┐
+    │ domain-researcher│       │  resource-scout  │
+    │   (并行 fork)    │       │   (并行 fork)    │
+    └────────┬─────────┘       └────────┬─────────┘
+             │                          │
+             ▼                          ▼
+      domain-knowledge.md      resources-collected.md
+             │                          │
+             └──────────┬───────────────┘
+                        ▼
+              ┌──────────────────┐
+              │ learning-planner │ (串行)
+              └────────┬─────────┘
+                       │
+                       ▼
+               learning-path.md
+                       │
+                       ▼
+              ┌──────────────────┐
+              │timeline-architect│ (串行)
+              └────────┬─────────┘
+                       │
+                       ▼
+                  timeline.md
+                       │
+                       ▼
+              ┌──────────────────┐
+              │route-coordinator │ (串行)
+              └────────┬─────────┘
+                       │
+                       ▼
+            learning-roadmap.md (最终交付)
 ```
 
-**拓扑类型**：串行 + 反馈循环
-
-**调整说明**：Critical 建议将 exercise-designer 放在 content-writer 之后，技术上更合理。原并行设计会导致 exercise-designer 缺乏上下文。
+**拓扑类型**：混合型（初始并行 + 后续串行）
 
 ---
 
@@ -57,67 +72,143 @@
 
 | 文件名 | 写入者 | 读取者 | 格式 |
 |-------|-------|-------|------|
-| project-structure.md | file-analyzer | content-writer | Markdown（文件树+关键文件说明） |
-| tutorial-content.md | content-writer | exercise-designer, content-reviewer, assembler | Markdown（章节+代码块） |
-| exercises.md | exercise-designer | content-reviewer, assembler | Markdown（题目+答案） |
-| review-feedback.md | content-reviewer | content-writer | Markdown（问题列表+修改建议） |
-| final-tutorial.md | assembler | 无（最终输出） | Markdown（完整教程） |
-| review-round.txt | content-reviewer | content-reviewer | 纯文本（当前轮次计数） |
+| `domain-knowledge.md` | domain-researcher | learning-planner, route-coordinator | Markdown（结构化领域知识） |
+| `resources-collected.md` | resource-scout | learning-planner, route-coordinator | Markdown（资源清单 + 链接） |
+| `learning-path.md` | learning-planner | timeline-architect, route-coordinator | Markdown（三轨学习路径） |
+| `timeline.md` | timeline-architect | route-coordinator | Markdown（里程碑 + 甘特图） |
+| `learning-roadmap.md` | route-coordinator | 用户 | Markdown（最终交付文档） |
 
 ---
 
 ## Skill 和 MCP 需求
 
 ### 需要的 Skill
-
-| Skill | 用途 | 使用者 |
-|-------|------|--------|
-| 无需外部 skill | 本任务为内容生成型，无需外部工具集成 | - |
-
-**说明**：self-improving-agent skill 由 toolsmith-infra 自动配置（因为 self-improving = yes）。
+| Skill | 用途 | 调用者 |
+|-------|------|-------|
+| `find-skill` | 搜索现有 skill 复用 | toolsmith-skills |
+| `create-skill` | 从零创建 skill | toolsmith-skills |
 
 ### 需要的 MCP
+| MCP | 用途 | 依赖 Agent |
+|-----|------|-----------|
+| `@anthropic-ai/mcp-server-github` | 搜索 GitHub 仓库、查看 README | resource-scout |
+| 无需额外 MCP | WebSearch 可直接搜索学术文献 | resource-scout, domain-researcher |
 
-**无**：本 team 不需要外部 API 或数据库连接。
+**MCP 集成方案**：
+- **GitHub**：resource-scout 通过 MCP 搜索低空经济/TSP/路线规划相关的开源项目，获取代码复现资源
+- **学术文献**：使用内置 WebSearch 搜索 Google Scholar/arXiv/知网，无需额外 MCP
 
 ---
 
-## 工具权限分析
+## 数据流详细设计
 
-| Agent | 权限 | 理由 |
-|-------|------|------|
-| file-analyzer | Read, Bash | Bash 用于 `find`/`ls` 扫描目录结构 |
-| content-writer | Read, Write | Read 项目文件，Write 教程内容 |
-| exercise-designer | Read, Write | Read 教程内容，Write 练习题 |
-| content-reviewer | Read, Write | Read 内容，Write 审查反馈 |
-| assembler | Read, Write | Read 所有内容，Write 最终文档 |
+### Phase 1：并行研究（domain-researcher || resource-scout）
 
-**最小权限原则**：除 file-analyzer 外，其他 agent 均不需要 Bash。
+**domain-researcher 输出结构**：
+```markdown
+# 低空经济领域知识
+
+## 领域概述
+[定义、发展历程、核心概念]
+
+## TSP 问题
+[数学模型、经典算法、研究前沿]
+
+## 路线规划
+[问题分类、主流方法、应用场景]
+
+## 研究热点
+[近期高引论文方向、未解决问题]
+
+## 推荐切入点
+[3-5 个潜在研究方向]
+```
+
+**resource-scout 输出结构**：
+```markdown
+# 学习资源汇总
+
+## GitHub 项目
+| 项目名 | Stars | 描述 | 链接 | 推荐指数 |
+|-------|-------|------|------|---------|
+
+## 学术文献
+| 标题 | 作者 | 年份 | 来源 | 链接 |
+|-----|------|------|------|------|
+
+## 在线课程
+| 名称 | 平台 | 时长 | 链接 |
+|-----|------|------|------|
+```
+
+### Phase 2：学习路径设计（learning-planner）
+
+输入：`domain-knowledge.md` + `resources-collected.md`
+
+输出结构：
+```markdown
+# 学习路径设计
+
+## 第一阶段：快速入门（2周）
+### 课程学习
+### 文献精读
+### 实践任务
+
+## 第二阶段：深入专题（4周）
+...
+
+## 第三阶段：研究切入（6周）
+...
+```
+
+### Phase 3：时间规划（timeline-architect）
+
+输入：`learning-path.md`
+
+输出结构：
+```markdown
+# 时间规划
+
+## 总体里程碑
+| 里程碑 | 截止日期 | 交付物 |
+|-------|---------|-------|
+
+## 每周计划
+### Week 1 (Mar 24 - Mar 30)
+- [ ] 任务1
+- [ ] 任务2
+
+## 每日建议
+- 学习时间：6h/天
+- 分配原则：40% 文献 + 30% 代码 + 30% 写作
+```
+
+### Phase 4：最终汇总（route-coordinator）
+
+合并所有输出，生成完整的学习路线图文档。
 
 ---
 
 ## 技术风险
 
-| 风险 | 缓解措施 |
-|-----|---------|
-| 项目目录过大导致扫描超时 | file-analyzer 限制深度，优先扫描入口文件 |
-| 反馈循环无限迭代 | review-round.txt 计数器，超过 2 轮强制通过 |
-| Bash 权限滥用风险 | file-analyzer 的 Bash 仅限读取命令，禁止修改操作 |
+| 风险 | 影响 | 缓解措施 |
+|-----|------|---------|
+| WebSearch 结果不稳定 | 资源搜集质量波动 | 提供备选关键词，多次搜索取并集 |
+| GitHub MCP 未配置 | 无法获取仓库详情 | 降级为 WebFetch 抓取 README |
+| 领域知识更新快 | 推荐内容过时 | 标注「截至 2026-03」，建议用户自行验证 |
 
 ---
 
-## 与 Critical 的分歧点
+## 与 Critical 的潜在分歧点
 
-**分歧**：原设计的并行关系（file-analyzer || exercise-designer）
+如果 Critical 建议减少 agent 数量（如合并 domain-researcher 和 resource-scout），技术上可行但会损失并行效率。考虑到用户时间紧迫，建议保留并行设计。
 
-**Technical 认同 Critical 建议**：
-- exercise-designer 需要教程内容上下文才能设计匹配的练习题
-- 并行会导致练习题与内容脱节
-- 建议改为串行：content-writer → exercise-designer
+如果 Critical 建议简化 MCP 集成，技术上可以完全依赖 WebSearch，但 GitHub MCP 能提供更精准的代码资源搜索。
 
-**修正后的拓扑**：
-```
-file-analyzer → content-writer → exercise-designer → content-reviewer → assembler
-                                       ↑                      │
-                                       └──────────────────────┘ (反馈)
-```
+---
+
+## 下一步
+
+1. 等待 Strategic 和 Critical 分析完成
+2. director-council 进行收敛裁决
+3. 输出 `council-convergence.md`
