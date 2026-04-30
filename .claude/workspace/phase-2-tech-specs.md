@@ -1,4 +1,4 @@
-# Visionary-Tech 规格
+# Phase 2 Tech 规格 — question-generator
 
 **基于**：phase-1-architecture.md
 **负责范围**：工具权限 + Skill/MCP + Workspace 协议
@@ -8,112 +8,73 @@
 ## 工具权限分配
 
 | Agent | allowed-tools | Bash 使用场景 |
-|-------|--------------|---------------|
-| **domain-researcher** | Read, WebSearch, WebFetch | — |
-| **learning-roadmap-planner** | Read, Write, WebSearch, WebFetch | — |
-
-### 工具权限说明
-
-| 工具 | domain-researcher | learning-roadmap-planner | 使用场景说明 |
-|-----|------------------|-------------------------|-------------|
-| `Read` | 读取需求文件、上游输出 | 读取需求文件、领域知识 | 基础只读操作 |
-| `WebSearch` | 搜索低空经济政策、TSP 文献 | 搜索课程资源、GitHub 仓库 | 网络信息检索 |
-| `WebFetch` | 抓取行业报告全文 | 抓取课程详情、论文摘要 | 深入获取网页内容 |
-| `Write` | — | 输出最终学习路线文档 | 创建最终交付物 |
-
-**Bash 不需要**：本 Team 所有操作均可通过内置工具完成，无需执行外部命令。
+|-------|---------------|--------------|
+| **pdf-reader** | Read | — |
+| **question-generator** | Read, Write | — |
+| **quality-reviewer** | Read, Write | — |
+| **word-exporter** | Read, Bash | 执行 pandoc 命令进行 Markdown → Word 转换 |
 
 ---
 
-## Skill 需求 + 搜索提示
+## Skill 需求 + 搜索提示（供 Library Scout 使用）
 
-### 可复用 Skill 清单
+| 需求描述 | 搜索关键词（英文） | 使用的 Agent | 备注 |
+|---------|------------------|------------|------|
+| PDF 内容解析 | pdf parse, pdf read, document extract | pdf-reader | Claude 内置 PDF 读取，可能不需要独立 skill |
+| 题目生成 | question generate, quiz create, exam maker | question-generator | 核心功能，需原创或深度定制 |
+| 答案验证 | answer validate, fact check, verify | quality-reviewer | 可能不需要独立 skill，使用 agent 逻辑 |
+| Markdown 转 Word | markdown to word, pandoc, docx convert | word-exporter | 使用 pandoc 命令行工具 |
+| 自我改进 | self-improving, learning, feedback | 所有 agent | 需配置 self-improving-agent skill |
+| Instinct 提炼 | instinct, pattern mining, learning | self-improving-agent | 需配置 instinct-engine skill |
 
-| 需求描述 | 搜索关键词 | 使用的 Agent | 候选 Skill | 安装量 | 推荐度 |
-|---------|-----------|-------------|-----------|--------|-------|
-| 系统性网络研究 | web research | domain-researcher | `langchain-ai/deepagents@web-research` | 941 | ★★★★★ |
-| 学术文献研究 | academic research | domain-researcher | `shubhamsaboo/awesome-llm-apps@academic-researcher` | 2.1K | ★★★★★ |
-| GitHub 代码搜索 | github search | learning-roadmap-planner | `parcadei/continuous-claude-v3@github-search` | 316 | ★★★★☆ |
-| 学习路径设计 | learning path | learning-roadmap-planner | `rysweet/amplihack@learning-path-builder` | 134 | ★★★★☆ |
+## Agent 搜索提示（供 Library Scout 使用）
 
-### Skill 决策建议
-
-**domain-researcher** 建议安装：
-- `langchain-ai/deepagents@web-research` — 系统性网络研究流程
-- `shubhamsaboo/awesome-llm-apps@academic-researcher` — 学术研究方法论
-
-**learning-roadmap-planner** 建议安装：
-- `rysweet/amplihack@learning-path-builder` — 学习路径结构化设计
-
-**可选**（GitHub MCP 未配置时）：
-- `parcadei/continuous-claude-v3@github-search` — 通过 WebSearch 增强 GitHub 搜索能力
-
-### Agent 搜索提示（供 Library Scout 使用）
-
-| 目标 Agent | 搜索关键词 | 期望的核心能力 |
-|-----------|-----------|--------------|
-| domain-researcher | academic researcher, domain expert, knowledge graph | 领域知识调研、文献综述、知识图谱构建 |
-| learning-roadmap-planner | learning path, curriculum designer, education planner | 学习路径设计、资源整合、时间规划 |
+| 目标 Agent | 搜索关键词（英文） | 期望的核心能力 |
+|-----------|------------------|--------------|
+| pdf-reader | pdf reader, document parser, content extractor | 读取 PDF，提取结构化内容 |
+| question-generator | quiz generator, exam creator, question maker | 根据内容生成题目 |
+| quality-reviewer | code reviewer, content reviewer, validator | 审查内容质量，验证准确性 |
+| word-exporter | document exporter, format converter | 导出文档到不同格式 |
 
 ---
 
 ## 需原创的 Skill
 
-**结论：无需原创 Skill**
+### self-improving-agent
 
-理由：
-1. `web-research` 和 `academic-researcher` 已有成熟方案，直接安装
-2. `learning-path-builder` 可满足学习路径设计需求
-3. 本 Team 核心是信息检索与整合，不涉及特殊业务逻辑
+**触发场景**：Team 启用了 self-improving 功能，需要记录运行经验
+
+**核心步骤**：
+1. 检查 `.learnings/` 目录是否存在
+2. 每次会话结束时，提取关键操作和决策
+3. 将经验写入 `.learnings/entries/LRN-XXX.json`
+4. 记录错误时写入 `.learnings/entries/ERR-XXX.json`
+
+**需要辅助脚本**：no（由 agent 内部逻辑实现）
+
+### instinct-engine
+
+**触发场景**：self-improving 启用且 instincts 启用，需要提炼可复用模式
+
+**核心步骤**：
+1. 扫描 `.learnings/entries/` 目录
+2. 识别相同模式的 learning（≥3 条）
+3. 提炼为 instinct，写入 `.learnings/instincts/INSTINCT-XXX.json`
+4. 更新置信度和衰减时间
+
+**需要辅助脚本**：no（由 agent 内部逻辑实现）
 
 ---
 
 ## MCP 集成配置
 
-### 推荐配置（可选）
-
-`.claude/settings.json` 配置段：
-
-```json
-{
-  "mcpServers": {
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@anthropic-ai/mcp-server-github"],
-      "env": {
-        "GITHUB_TOKEN": "请填入"
-      }
-    }
-  }
-}
-```
-
-### MCP 需求表
-
-| MCP | 使用的 Agent | 需要的 Token | 获取方式 |
-|-----|------------|-------------|---------|
-| GitHub（可选） | learning-roadmap-planner | GITHUB_TOKEN | https://github.com/settings/tokens |
-
-### 降级策略
-
-如果 GitHub MCP 未配置：
-1. `learning-roadmap-planner` 使用 `WebSearch` 搜索 `github.com` 上的相关仓库
-2. 使用 `WebFetch` 获取仓库详情（README、星标数、最近更新）
-3. 功能完整度约 80%，满足基本需求
+**本 Team 不依赖 MCP 工具**，使用 Claude 内置能力 + pandoc 命令行工具。
 
 ---
 
 ## Hook 配置
 
-**Profile 级别**：minimal
-
-### 标准 Hook（minimal 级别）
-
-| 脚本 | 事件 | Profile | 实现要点 |
-|------|------|---------|---------|
-| `pre-tool-safety.js` | PreToolUse(Bash) | minimal+ | 阻止 `rm -rf /`、硬编码凭证、`eval` 注入 |
-
-**说明**：minimal 级别仅启用安全检查 hook。由于本 Team 无 Bash 权限，hook 主要作为防护层。
+根据 Profile: minimal，仅包含安全检查 Hook。
 
 ### settings.json hooks 配置段
 
@@ -124,7 +85,7 @@
       "matcher": "Bash",
       "hooks": [{
         "type": "command",
-        "command": "node scripts/hooks/pre-tool-safety.js",
+        "command": "node .claude/scripts/hooks/pre-tool-safety.js",
         "timeout": 5
       }]
     }]
@@ -132,160 +93,145 @@
 }
 ```
 
-### 自定义 Hook
+### Hook 脚本实现要点
 
-**无需自定义 Hook**
+#### pre-tool-safety.js
 
-理由：
-1. 本 Team 无 Bash 权限，无需额外安全限制
-2. 无共享文件写入冲突风险
-3. 任务性质为一次性文档生成，无需会话摘要
+| 检查项 | 实现要点 |
+|-------|---------|
+| 危险命令拦截 | 阻止 `rm -rf /`、`rm -rf ~`、`rm -rf *` |
+| 凭证硬编码检测 | 检测命令中是否包含 API key、password 等敏感信息 |
+| eval 注入检测 | 阻止 `eval` 配合用户输入的组合 |
 
 ---
 
 ## Workspace 文件协议
 
-### 文件清单
-
 | 文件 | 写入者 | 读取者 | 格式说明 |
 |-----|-------|-------|---------|
-| `phase-0-requirements.md` | director-council | domain-researcher, learning-roadmap-planner | 需求文档（只读） |
-| `domain-knowledge.md` | domain-researcher | learning-roadmap-planner | Markdown 结构化知识图谱 |
-| `learning-roadmap.md` | learning-roadmap-planner | 用户（最终交付） | Markdown 学习路线文档 |
+| `workspace/pdf-content.md` | pdf-reader | question-generator, quality-reviewer | PDF 内容分析报告（结构化 Markdown）|
+| `workspace/questions.md` | question-generator | quality-reviewer, word-exporter | 题目文件（Markdown 格式）|
+| `workspace/review-report.md` | quality-reviewer | 用户 | 审查报告 |
+| `output/questions.docx` | word-exporter | 用户 | Word 导出文件 |
 
-### 传递顺序
-
+**传递顺序**：
 ```
-phase-0-requirements.md
-         │
-         ├──────────────────────────┐
-         ▼                          ▼
-  domain-researcher          learning-roadmap-planner
-   (context: fork)              (等待上游)
-         │                          │
-         ▼                          │
-   domain-knowledge.md ────────────┘
-                                   │
-                                   ▼
-                         learning-roadmap.md → 最终交付
-```
-
-### 文件格式规范
-
-**domain-knowledge.md** 结构：
-```markdown
-# 领域知识图谱
-
-## 低空经济
-- 政策框架
-- 产业现状
-- 研究热点
-
-## TSP 问题
-- 经典变体
-- 算法演进
-- 近期突破
-
-## 路线规划（低空场景）
-- 特殊约束
-- 应用场景
-- 研究空白
-
-## 研究热点矩阵
-| 方向 | 成熟度 | 创新空间 | 推荐度 |
-|-----|-------|---------|-------|
-```
-
-**learning-roadmap.md** 结构：
-```markdown
-# 低空经济研究方向学习路线
-
-## 1. 领域知识概览
-## 2. 学习路径设计
-### 2.1 课程轨道
-### 2.2 文献轨道
-### 2.3 实践轨道
-## 3. 资源清单
-### 3.1 GitHub 代码
-### 3.2 学术论文
-### 3.3 课程资源
-## 4. 时间规划
-## 5. 研究切入点建议
-
----
-**生成时间**：[timestamp]
-**风险提示**：半年内从新手到 SCI 一区难度极高，建议...
+pdf-reader → pdf-content.md → question-generator → questions.md → quality-reviewer → word-exporter → questions.docx
 ```
 
 ---
 
 ## 辅助脚本需求
 
-**无需辅助脚本**
+| 脚本 | 用途 | 调用方 |
+|-----|------|-------|
+| `hooks/pre-tool-safety.js` | Bash 命令安全检查 | Hook 系统 |
+| `check-pandoc.sh` | 检测 pandoc 是否安装 | word-exporter |
 
-理由：
-1. 无需执行外部命令（无 Bash 权限）
-2. 所有数据处理由 agent 内置能力完成
-3. 输出为纯 Markdown，无需格式转换
+### check-pandoc.sh 实现
+
+```bash
+#!/usr/bin/env bash
+# 检测 pandoc 是否可用
+
+if command -v pandoc &> /dev/null; then
+    echo "✅ pandoc 已安装: $(pandoc --version | head -1)"
+    exit 0
+else
+    echo "❌ pandoc 未安装"
+    echo ""
+    echo "安装方法："
+    echo "  Windows: choco install pandoc 或 winget install pandoc"
+    echo "  macOS:   brew install pandoc"
+    echo "  Linux:   sudo apt install pandoc 或 sudo yum install pandoc"
+    exit 1
+fi
+```
+
+---
+
+## .learnings 目录结构
+
+启用 self-improving + instincts 时使用：
+
+```
+.learnings/
+├── README.md                    # 说明文档
+├── entries/                     # 原始 learning 条目
+│   ├── LRN-001.json            # 成功经验
+│   └── ERR-001.json            # 错误记录
+└── instincts/                   # 提炼后的 instinct
+    └── INSTINCT-001.json       # 可复用模式
+```
+
+### Learning 条目格式
+
+```json
+{
+  "id": "LRN-001",
+  "type": "LRN",
+  "timestamp": "2026-03-27T10:00:00Z",
+  "context": "出题场景描述",
+  "lesson": "学到的经验",
+  "status": "pending",
+  "source_agent": "question-generator",
+  "confidence": 0.8
+}
+```
+
+### Instinct 格式
+
+```json
+{
+  "id": "INSTINCT-001",
+  "pattern": "招聘资料优先考查数字、时间类知识点",
+  "confidence": 0.85,
+  "source_entries": ["LRN-001", "LRN-002", "LRN-003"],
+  "created": "2026-03-27T10:00:00Z",
+  "last_reinforced": "2026-03-27T10:00:00Z",
+  "decay_days": 30,
+  "status": "active"
+}
+```
 
 ---
 
 ## 与 Visionary-UX 的注意点
 
-### 工具权限与 Prompt 设计的配合
-
-| Agent | 工具约束 | UX Prompt 需要说明 |
-|-------|---------|------------------|
-| domain-researcher | 无 Write 权限 | 在 prompt 中明确输出到 `domain-knowledge.md`，而非直接返回 |
-| learning-roadmap-planner | 有 Write 权限 | 使用 `Write` 工具创建 `learning-roadmap.md`，确保原子写入 |
-
-### Fork Agent 的 Prompt 设计
-
-`domain-researcher` 使用 `context: fork`，UX 设计需：
-1. 明确告知其独立运行，不等待其他 agent
-2. 输出文件名固定为 `domain-knowledge.md`
-3. Prompt 中包含「完成后立即写入，无需等待确认」的指令
-
-### 等待逻辑的 Prompt 设计
-
-`learning-roadmap-planner` 需等待上游，UX 设计需：
-1. 启动时检查 `domain-knowledge.md` 是否存在
-2. 若不存在，提示用户先运行 `domain-researcher`
-3. 读取后继续执行，不阻塞
+| Agent | UX Layer 3 步骤 | Tech 注意事项 |
+|-------|----------------|--------------|
+| word-exporter | Step 2 检查 pandoc | 需要提供 check-pandoc.sh 脚本 |
+| quality-reviewer | 需同时读取两个文件 | 无特殊权限需求，Read 即可 |
+| question-generator | Subagent 委派逻辑 | 无特殊权限需求，使用 Claude 内置能力 |
 
 ---
 
-## Skill 安装命令（供 toolsmith-skills 使用）
+## 目录结构
 
-```bash
-# 必装（domain-researcher）
-npx skills add langchain-ai/deepagents@web-research
-npx skills add shubhamsaboo/awesome-llm-apps@academic-researcher
-
-# 必装（learning-roadmap-planner）
-npx skills add rysweet/amplihack@learning-path-builder
-
-# 可选（GitHub MCP 替代方案）
-npx skills add parcadei/continuous-claude-v3@github-search
 ```
-
----
-
-## 技术风险与缓解
-
-| 风险 | 影响 | 缓解措施 |
-|-----|------|---------|
-| Skill 安装失败 | 部分功能降级 | 使用内置 WebSearch + WebFetch 替代 |
-| GitHub MCP 未配置 | 代码搜索能力受限 | 降级为 WebSearch 搜索 github.com |
-| WebSearch API 限制 | 信息检索中断 | 分批检索，使用 WebFetch 补充详情 |
-
----
-
-## 完成检查清单
-
-- [x] 工具权限分配完成（2 个 agent）
-- [x] Skill 搜索完成，找到 4 个候选
-- [x] MCP 配置设计完成（GitHub 可选）
-- [x] Hook 配置设计完成（minimal 级别）
-- [x] Workspace 文件协议设计完成
-- [x] 与 UX 的注意点标注完成
+question-generator_teams_v1/
+├── CLAUDE.md
+├── README.md
+├── CONVENTIONS.md
+├── input/                      # 用户放置 PDF 文件
+├── output/                     # 导出文件输出
+├── .claude/
+│   ├── agents/
+│   │   ├── pdf-reader.md
+│   │   ├── question-generator.md
+│   │   ├── quality-reviewer.md
+│   │   └── word-exporter.md
+│   ├── skills/
+│   │   └── self-improving-agent/
+│   │       └── SKILL.md
+│   ├── scripts/
+│   │   └── hooks/
+│   │       └── pre-tool-safety.js
+│   ├── workspace/              # 运行时数据传递
+│   └── commands/
+│       └── team.md             # /project:team 入口
+└── .learnings/
+    ├── README.md
+    ├── entries/
+    └── instincts/
+```

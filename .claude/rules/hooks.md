@@ -43,6 +43,14 @@ scripts/hooks/
         "command": "node scripts/hooks/session-summary.js",
         "timeout": 30
       }]
+    }],
+    "PostToolUse": [{
+      "matcher": "Write",
+      "hooks": [{
+        "type": "command",
+        "command": "node scripts/hooks/post-write-doc-check.js",
+        "timeout": 10
+      }]
     }]
   }
 }

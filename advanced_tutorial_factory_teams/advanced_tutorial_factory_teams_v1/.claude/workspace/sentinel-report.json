@@ -1,0 +1,17 @@
+{
+  "timestamp": "2026-03-17T18:00:00+08:00",
+  "target": "D:/agentset/advanced_tutorial_factory_teams/advanced_tutorial_factory_teams_v1",
+  "version": "v1",
+  "retry_count": 0,
+  "dimensions": {
+    "format_compliance": 10,
+    "conflict_detection": 10,
+    "execution_model": 10,
+    "workspace_protocol": 10,
+    "content_quality": 10,
+    "integration_completeness": 10
+  },
+  "pass_condition": "all dimensions >= 8",
+  "result": "PASSED",
+  "issues": []
+}

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# infra-hooks-gen 生成脚本
-# 用法: bash generate.sh <output_dir> <profile>
+# Generate runtime hooks and .claude/settings.json for a produced team.
+# Usage: bash generate.sh <output_dir> <profile>
 
 OUTPUT_DIR="${1:-.}"
 PROFILE="${2:-standard}"
@@ -10,42 +10,40 @@ PROFILE="${2:-standard}"
 mkdir -p "$OUTPUT_DIR/scripts/hooks"
 mkdir -p "$OUTPUT_DIR/.claude"
 
-# 生成 pre-tool-safety.js（所有 Profile 必需）
 cat > "$OUTPUT_DIR/scripts/hooks/pre-tool-safety.js" << 'SAFETYEOF'
 #!/usr/bin/env node
 /**
- * PreToolUse 安全检查 Hook
- * 阻止危险命令执行
- * Exit 0 = 放行, Exit 2 = 阻止
+ * PreToolUse safety hook.
+ * Exit 0 = allow, Exit 2 = block.
  */
 
 const DANGEROUS_PATTERNS = [
-  /rm\s+-rf\s+\//,                    // rm -rf /
-  /rm\s+-rf\s+\$/,                    // rm -rf $VAR
-  /sk-[a-zA-Z0-9]{20,}/,              // Anthropic API key
-  /ghp_[a-zA-Z0-9]{36}/,              // GitHub PAT
-  /gho_[a-zA-Z0-9]{36}/,              // GitHub OAuth
-  /xox[baprs]-[a-zA-Z0-9-]+/,         // Slack tokens
-  /eval\s*\(/,                        // eval injection
-  /eval\s+\$/,                        // eval $VAR
+  /rm\s+-rf\s+\//,
+  /rm\s+-rf\s+\$/,
+  /sk-[a-zA-Z0-9]{20,}/,
+  /ghp_[a-zA-Z0-9]{36}/,
+  /gho_[a-zA-Z0-9]{36}/,
+  /xox[baprs]-[a-zA-Z0-9-]+/,
+  /eval\s*\(/,
+  /eval\s+\$/,
 ];
 
 async function main() {
-  let input = '';
+  let input = "";
   for await (const chunk of process.stdin) {
     input += chunk;
   }
 
   try {
     const data = JSON.parse(input);
-    const tool = data.tool || '';
-    const command = data.input?.command || '';
+    const tool = data.tool || "";
+    const command = data.input?.command || "";
 
-    if (tool === 'Bash' && command) {
+    if (tool === "Bash" && command) {
       for (const pattern of DANGEROUS_PATTERNS) {
         if (pattern.test(command)) {
           console.log(JSON.stringify({
-            decision: 'deny',
+            decision: "deny",
             reason: `Blocked: matches dangerous pattern ${pattern}`
           }));
           process.exit(2);
@@ -53,10 +51,10 @@ async function main() {
       }
     }
 
-    console.log(JSON.stringify({ decision: 'allow' }));
+    console.log(JSON.stringify({ decision: "allow" }));
     process.exit(0);
-  } catch (e) {
-    console.log(JSON.stringify({ decision: 'allow' }));
+  } catch {
+    console.log(JSON.stringify({ decision: "allow" }));
     process.exit(0);
   }
 }
@@ -64,42 +62,38 @@ async function main() {
 main();
 SAFETYEOF
 
-# 生成 session-summary.js（standard/strict Profile）
 if [ "$PROFILE" = "standard" ] || [ "$PROFILE" = "strict" ]; then
   cat > "$OUTPUT_DIR/scripts/hooks/session-summary.js" << 'SUMMARYEOF'
 #!/usr/bin/env node
 /**
- * Stop Hook: 会话摘要
- * 将关键决策写入 .learnings/
+ * Stop hook: persist a lightweight session summary when .learnings exists.
  */
 
 async function main() {
-  let input = '';
+  let input = "";
   for await (const chunk of process.stdin) {
     input += chunk;
   }
 
   try {
-    const data = JSON.parse(input);
+    JSON.parse(input);
     const timestamp = new Date().toISOString();
-
-    // 写入摘要到 .learnings（如果目录存在）
-    const fs = await import('fs');
-    const path = await import('path');
-    const learningsDir = '.learnings';
+    const fs = await import("fs");
+    const path = await import("path");
+    const learningsDir = ".learnings";
 
     if (fs.existsSync(learningsDir)) {
-      const summaryFile = path.join(learningsDir, 'last-session.json');
+      const summaryFile = path.join(learningsDir, "last-session.json");
       fs.writeFileSync(summaryFile, JSON.stringify({
         timestamp,
-        summary: 'Session completed'
+        summary: "Session completed"
       }, null, 2));
     }
 
-    console.log(JSON.stringify({ status: 'ok' }));
+    console.log(JSON.stringify({ status: "ok" }));
     process.exit(0);
   } catch (e) {
-    console.log(JSON.stringify({ status: 'error', message: e.message }));
+    console.log(JSON.stringify({ status: "error", message: e.message }));
     process.exit(0);
   }
 }
@@ -108,12 +102,95 @@ main();
 SUMMARYEOF
 fi
 
-# 生成 settings.json
-echo "=== 生成 settings.json (Profile: $PROFILE) ==="
+if [ "$PROFILE" = "strict" ]; then
+  cat > "$OUTPUT_DIR/scripts/hooks/post-write-doc-check.js" << 'DOCCHECKEOF'
+#!/usr/bin/env node
+/**
+ * PostToolUse hook: remind users to update docs after code/config writes.
+ */
+
+const DOC_SUFFIXES = [".md", ".mdx", ".txt", ".rst", ".adoc", ".doc", ".docx"];
+const CODE_SUFFIXES = [
+  ".js", ".jsx", ".ts", ".tsx", ".py", ".sh", ".ps1", ".java", ".go", ".rs",
+  ".rb", ".php", ".c", ".cc", ".cpp", ".h", ".hpp", ".json", ".yaml", ".yml",
+  ".toml", ".ini"
+];
+
+function collectStringValues(value, results = []) {
+  if (typeof value === "string") {
+    results.push(value);
+    return results;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectStringValues(item, results);
+    }
+    return results;
+  }
+
+  if (value && typeof value === "object") {
+    for (const nested of Object.values(value)) {
+      collectStringValues(nested, results);
+    }
+  }
+
+  return results;
+}
+
+function looksLikePath(value) {
+  return /[\\/]/.test(value) || /\.[a-z0-9]{1,8}$/i.test(value);
+}
+
+function normalizePath(value) {
+  return value.replace(/\\/g, "/");
+}
+
+function isDocPath(filePath) {
+  const normalized = normalizePath(filePath).toLowerCase();
+  return DOC_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+}
+
+function isCodeOrConfigPath(filePath) {
+  const normalized = normalizePath(filePath).toLowerCase();
+  return CODE_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+}
+
+async function main() {
+  let input = "";
+  for await (const chunk of process.stdin) {
+    input += chunk;
+  }
+
+  try {
+    const data = JSON.parse(input);
+    const paths = collectStringValues(data).filter(looksLikePath);
+    const touchedDocs = paths.some(isDocPath);
+    const touchedCode = paths.some(isCodeOrConfigPath);
+
+    if (touchedCode && !touchedDocs) {
+      console.log(JSON.stringify({
+        status: "reminder",
+        reminder: "Code or config changed. Review whether README.md, CLAUDE.md, or CONVENTIONS.md should be updated."
+      }));
+      process.exit(0);
+    }
+
+    console.log(JSON.stringify({ status: "ok" }));
+    process.exit(0);
+  } catch {
+    console.log(JSON.stringify({ status: "ok" }));
+    process.exit(0);
+  }
+}
+
+main();
+DOCCHECKEOF
+fi
 
 SETTINGS_FILE="$OUTPUT_DIR/.claude/settings.json"
+echo "=== Generating settings.json (Profile: $PROFILE) ==="
 
-# 根据 Profile 生成 hooks 配置
 if [ "$PROFILE" = "minimal" ]; then
   cat > "$SETTINGS_FILE" << 'EOF'
 {
@@ -219,7 +296,9 @@ elif [ "$PROFILE" = "strict" ]; then
             "timeout": 5
           }
         ]
-      },
+      }
+    ],
+    "PostToolUse": [
       {
         "matcher": "Write",
         "hooks": [
@@ -267,5 +346,6 @@ else
 EOF
 fi
 
-echo "✅ settings.json 已生成: $SETTINGS_FILE"
-echo "✅ Hook 脚本已生成: $OUTPUT_DIR/scripts/hooks/"
+chmod +x "$OUTPUT_DIR/scripts/hooks/"*.js 2>/dev/null || true
+echo "Generated $SETTINGS_FILE"
+echo "Generated runtime hooks in $OUTPUT_DIR/scripts/hooks/"

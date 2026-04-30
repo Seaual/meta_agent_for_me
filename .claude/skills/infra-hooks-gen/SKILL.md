@@ -41,6 +41,8 @@ bash .claude/skills/infra-hooks-gen/scripts/generate.sh "$OUTPUT_DIR" "$PROFILE"
 
 # 确认 hook 脚本存在
 [ -f "$OUTPUT_DIR/scripts/hooks/pre-tool-safety.js" ] && echo "✅ pre-tool-safety.js" || echo "🔴 pre-tool-safety.js 缺失"
+[ -f "$OUTPUT_DIR/scripts/hooks/session-summary.js" ] || [ "$PROFILE" = "minimal" ] || echo "🔴 session-summary.js 缺失"
+[ -f "$OUTPUT_DIR/scripts/hooks/post-write-doc-check.js" ] || [ "$PROFILE" != "strict" ] || echo "🔴 post-write-doc-check.js 缺失"
 ```
 
 ---
@@ -52,6 +54,7 @@ bash .claude/skills/infra-hooks-gen/scripts/generate.sh "$OUTPUT_DIR" "$PROFILE"
 | `.claude/settings.json` | 权限 + hooks 配置 | 所有 |
 | `scripts/hooks/pre-tool-safety.js` | 安全检查 | 所有 |
 | `scripts/hooks/session-summary.js` | 会话摘要 | standard+ |
+| `scripts/hooks/post-write-doc-check.js` | 文档提醒 | strict |
 
 ---
 
@@ -88,8 +91,8 @@ bash .claude/skills/infra-hooks-gen/scripts/generate.sh "$OUTPUT_DIR" "$PROFILE"
 
 ## Profile 对应的 Hooks
 
-| Profile | PreToolUse (Bash) | Stop (会话摘要) |
-|---------|-------------------|-----------------|
-| minimal | ✅ | ❌ |
-| standard | ✅ | ✅ |
-| strict | ✅ | ✅ |
+| Profile | PreToolUse (Bash) | Stop (会话摘要) | PostToolUse (Write) |
+|---------|-------------------|-----------------|---------------------|
+| minimal | ✅ | ❌ | ❌ |
+| standard | ✅ | ✅ | ❌ |
+| strict | ✅ | ✅ | ✅ |

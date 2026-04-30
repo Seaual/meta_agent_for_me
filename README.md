@@ -22,7 +22,7 @@ Meta-Agents 是一个运行在 Claude Code 中的系统，通过 6 阶段流水�
 - **Hook 系统** — 生成的 Team 包含 hooks（安全检查/会话摘要/文档提醒），配置在 settings.json
 - **运行时 Profile** — minimal/standard/strict 三级约束，Phase 0 Q8 选择，运行时可切换
 - **Instincts 持续学习** — .learnings/ 从扁平条目升级为两层结构（entries/ + instincts/），带置信度和衰减
-- **Agent/Skill Scout 分离** — 原 library-scout 拆分为 agent-scout 和 skill-scout，并行搜索评分
+- **Agent/Skill Scout 分离** — 原 library-scout 拆分为 agent-scout 和 skill-scout，并保留 legacy 兼容入口
 
 ### 核心特性
 
@@ -178,6 +178,8 @@ export PATH="$PATH:$APPDATA/npm"
 export PATH="$PATH:C:/Program Files/nodejs"
 ```
 
+Sentinel and several generator helper steps currently rely on Bash scripts. On Windows, use Git Bash or WSL in addition to Node.js.
+
 ---
 
 <a id="english"></a>
@@ -198,7 +200,7 @@ Meta-Agents runs inside Claude Code to analyze user requirements and generate co
 - **Hook System** — Teams include security/session-summary/doc-reminder hooks
 - **Runtime Profile** — minimal/standard/strict constraint levels
 - **Instincts** — Two-layer .learnings/ with confidence and decay
-- **Scout Separation** — library-scout split into agent-scout + skill-scout
+- **Scout Separation** — library-scout split into agent-scout + skill-scout, with a legacy compatibility alias retained
 
 ### Key Features
 
@@ -210,7 +212,7 @@ Meta-Agents runs inside Claude Code to analyze user requirements and generate co
 - **Self-Improving** — Optional `.learnings/` integration
 - **Version Upgrade** — Increment existing teams
 
-### Team Members (15 Agents)
+### Team Members (15 Core Agents + 1 Legacy Compatibility Agent)
 
 | Group | Agent | Role |
 |-------|-------|------|
@@ -229,6 +231,7 @@ Meta-Agents runs inside Claude Code to analyze user requirements and generate co
 | | `create-skill-agent` | Create skill from scratch/adapt |
 | | `toolsmith-assembler` | Merge worktrees + Slash Commands |
 | Review | `sentinel` | 6-dimension parallel scoring |
+| Legacy | `library-scout` | Backward-compatible pre-v8 scout entry point |
 
 ### Quick Start
 
@@ -257,8 +260,9 @@ npx skills add openclaw/skills@self-improving-agent -a claude-code -g -y
     ├── agents/
     ├── skills/
     ├── commands/          # Slash Commands (new in v8)
-    ├── scripts/hooks/     # Hook scripts (new in v8)
     └── workspace/
+├── scripts/
+│   └── hooks/            # Runtime hook scripts (new in v8)
 ```
 
 ---
@@ -272,7 +276,7 @@ meta_agent_for_me/
 ├── USER.md                                # User preferences
 ├── README.md
 ├── .claude/
-│   ├── agents/                            # 15 agents
+│   ├── agents/                            # 16 files: 15 core + 1 legacy compatibility agent
 │   │   ├── director-council.md
 │   │   ├── director-strategic.md
 │   │   ├── director-critical.md
@@ -282,6 +286,7 @@ meta_agent_for_me/
 │   │   ├── visionary-tech.md
 │   │   ├── agent-scout.md                 # v8: new
 │   │   ├── skill-scout.md                 # v8: new
+│   │   ├── library-scout.md               # legacy compatibility alias
 │   │   ├── toolsmith-infra.md
 │   │   ├── toolsmith-agents.md
 │   │   ├── toolsmith-skills.md
