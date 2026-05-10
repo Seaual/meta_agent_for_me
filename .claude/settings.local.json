@@ -1,6 +1,29 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
+    "allow": [
+      "Bash(mkdir -p xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/.claude/agents)",
+      "Bash(mkdir -p xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/.claude/skills)",
+      "Bash(mkdir -p xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/.claude/workspace)",
+      "Bash(mkdir -p xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/.claude/scripts)",
+      "Bash(mkdir -p xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/input)",
+      "Bash(echo \"5\")",
+      "Bash(echo \"done\")",
+      "Bash(pwd)",
+      "Bash(echo \"4\")",
+      "Bash(cp xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/CONVENTIONS.md xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v2/)",
+      "Bash(cp xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/.claude/settings.json xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v2/.claude/)",
+      "Bash(cp xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/.claude/data/* xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v2/.claude/data/)",
+      "Bash(cp xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/scripts/hooks/* xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v2/scripts/hooks/)",
+      "Bash(cp xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v1/.learnings/README.md xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v2/.learnings/)",
+      "Bash(cp CONVENTIONS.md ../xiaohongshu-content-creator_teams_v2/)",
+      "Bash(cp .claude/settings.json ../xiaohongshu-content-creator_teams_v2/.claude/)",
+      "Bash(cp .claude/data/* ../xiaohongshu-content-creator_teams_v2/.claude/data/)",
+      "Bash(cp scripts/hooks/* ../xiaohongshu-content-creator_teams_v2/scripts/hooks/)",
+      "Bash(cp .learnings/README.md ../xiaohongshu-content-creator_teams_v2/.learnings/)",
+      "Bash(echo \"3\")",
+      "Bash(echo \"6\")"
+    ],
     "defaultMode": "bypassPermissions"
   }
 }

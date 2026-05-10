@@ -1,1 +1,5 @@
 done
+total_skills: 5
+reuse_v4: 4 (xiaohongshu-style-writer, xiaohongshu-image-prompt-writer, self-improving-agent, instinct-engine)
+original_v5: 1 (canvas-image-composer)
+skills_sh_search: 6 candidates evaluated, max score 25/100 < threshold 65, original confirmed
