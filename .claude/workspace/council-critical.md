@@ -1,126 +1,196 @@
-# Critical Analysis — xiaohongshu v4 → v5
+# Critical 视角分析 — 题目工厂 Agent Team
 
-## 主要风险
+## 最简替代方案
 
-按严重程度排序：
+如果只用 1-2 个 agent，能完成多少核心功能？
 
-### 🔴 R1：node-canvas 在 Windows 上的安装是噩梦级别的
-node-canvas 不是纯 JS 包，它绑定原生 Cairo + Pango + libjpeg + giflib + librsvg。Windows 用户首次 `npm install canvas` 极大概率失败：
-- 需要 Visual Studio Build Tools（含 C++ 工作负载，>4GB）
-- 需要 Python 2.7 或 3.x 在 PATH
-- 需要 GTK 2 二进制包（官方文档让用户手动下载 `GTK2-Runtime` 解压到 C:\）
-- node-gyp 报错信息几乎不可读
-v4 用 Pillow 时 Python 用户 `pip install Pillow` 一行解决。**v5 把 90% 的安装难度从有 Python 环境的用户转嫁到没有 Cairo 工具链的用户。**
+| 方案 | Agent 数 | 覆盖度 | 说明 |
+|------|---------|--------|------|
+| **最简版** | 2 | ~90% | 题目生成器（含主题规划+题目生成+附件匹配）+ 质量协调器（含验证+CSV输出） |
+| **当前设计** | 5 | 100% | topic-planner + question-generator + attachment-matcher + quality-validator + data-coordinator |
 
-### 🔴 R2：image-processor 改成 Bash 调 Node 后，错误链路变长
-v4 路径：image-processor → Bash → `python scripts/image_pipeline.py` → 直接出图
-v5 路径：image-processor → Bash → Node 脚本 → `canvas-image-composer` skill → node-canvas → libcairo
-**多了一层"skill 间接"**。当出图错误时，用户看到的栈是 JS 异常而不是 Pillow 的 Python traceback，调试 Cairo 的字体回退问题比调 Pillow 难一个数量级（Cairo 的字体子像素渲染失败往往静默输出方块字，没有报错）。
+**最简版可行路径**：
+- Agent 1 `question-producer`：读取 seeds → 规划主题 → 生成题目 → 匹配附件（内嵌附件复用计数和格式占比检查）
+- Agent 2 `quality-coordinator`：执行同质化/时效性/附件合规验证 → 自动重试 → 输出 CSV
 
-### 🟡 R3：image2 兜底链路过长且没有熔断
-当前设计：素材匹配失败 → image2 生成新素材 → 写入 materials/ → Canvas 拼合。三个环节任一失败都导致最终无图。但 v4→v5 的变更里**没看到 image2 失败时的二次兜底**（比如纯文字 Canvas 卡片）。在 IMAGE2_API_KEY 未设置或网络挂掉时，用户得到的是一个空 output 目录。
+**为什么 2 个 agent 可能足够**：
+1. 主题规划本质是随机采样+行业亲和性过滤（seed_pool.py 已自动化），agent 只需确认覆盖 7 个 L1，不需要独立 agent
+2. 附件匹配在 `run_from_manifest.py` 中已改为「强制使用真实附件清单」，LLM 只需从给定列表中选择，不需要独立 agent 做复杂匹配
+3. 验证和 CSV 输出是天然串行（先验证后输出），由同一个 agent 完成可减少文件传递开销
+4. 自动重试逻辑在现有 Python 脚本中已实现（`_generate_with_retries`），agent 只需调用即可
 
-### 🟡 R4：字体分发的合规与体积陷阱
-思源黑体（Noto Sans SC）单个 .otf ~10MB，如果再加 Emoji（Noto Color Emoji ~24MB）、英文字体、衬线字体，`assets/fonts/` 轻松突破 60MB。git 仓库不适合存这种二进制；如果有 user 不小心把团队配置 push 到自己的 GitHub 公共仓，思源黑体 SIL OFL 没问题，但若日后有人换成方正/汉仪商用字体就是合规雷区。
-
-### 🟡 R5：v4 已工作的 Pillow 路径直接砍掉，无 fallback
-v4 的 image-processor 经过实战使用，至少素材直接复用、AI 编辑、Canvas 拼接三条路径都跑过。v5 把这些全部删除并指向尚未实现的 canvas-image-composer。**先写新模块再删旧模块**是正确做法，但 change-requests.md 明确说"删除 scripts/image_pipeline.py"——这等于让用户在 v5 没跑通时连降级回 v4 的本地能力都没了。
+**结论**：当前 5-agent 设计是「与原有流水线模块一一对应」的惯性映射，而非 Agent Team 的最优设计。原有流水线拆成 5 个 Python 模块是为了代码组织，不代表需要 5 个独立 agent。
 
 ---
 
-## 简化建议
+## 假设挑战
 
-**Canvas skill 是否真有必要？**——**有必要但当前设计偏重**。
-
-当前 change-requests.md 把 skill 描述成"封装合成原语：图层叠加、文字描边、Emoji/中文字体、毛玻璃、圆角、分割布局"，**这是把整个 Photoshop 抽象成 skill**。实际小红书封面只需要 3 种布局：
-1. 单图 + 顶部/底部标题条
-2. 双图分屏 + 中间标题
-3. 九宫格 + 角标
-
-简化方案：
-- 不做"封装合成原语"的通用 skill，而是 **3 个固定模板 Node 脚本**（`scripts/canvas/templates/single.js` / `split.js` / `grid.js`），每个 < 200 行
-- skill 的职责退化为"根据 image-matcher-output.md 选模板 + 注入参数"，而不是抽象 Canvas API
-- 不引入毛玻璃、圆角等高级特效（Cairo 的 blur 实现差且慢），用 PNG 预制贴图代替
+| 假设 | 是否合理 | 风险 |
+|-----|---------|------|
+| Agent 生成题目质量 >= 现有 Python 调用 LLM 的质量 | **存疑** | 现有 `generate_question.py` 有精心设计的 robust parser（XML/JSON/regex 三级回退），agent 直接生成可能丢失字段或格式不符 |
+| 5 个 agent 串行/并行执行比单脚本更快 | **有风险** | Agent 间文件传递、上下文切换、等待开销可能远超 Python ThreadPoolExecutor 的 4  worker 并行 |
+| 附件复用计数（最多 2 次）可由 agent 可靠维护 | **高风险** | 多 agent 并行时，`attachments/_index.json` 的 `used_in` 字段存在竞态条件，除非加文件锁 |
+| 同质化检查（相似度<=30%）在 agent 层面有效 | **存疑** | 现有 validate.py 的 batch check 需要全量题目才能计算 pairwise similarity，agent 逐题生成时无法实时获知全局分布 |
+| 每题 5-8 个附件、PDF>=20%、Excel>=20% 可持续满足 | **未验证** | 当前 manifest 中大量 topic 的附件全是 PDF（如 T01 6 个 PDF、0 个 Excel），Excel 占比要求可能无法满足 |
+| Agent 替代 Python 脚本能降低维护成本 | **存疑** | 现有代码已高度成熟（robust parser、retry、batch validation），转为 agent 提示词后反而更难版本控制和单元测试 |
+| 用户需要「Agent Team」而非「更好的 Python 脚本」 | **未验证** | 如果用户核心诉求是提升题目质量/产量，优化 prompt 和增加 LLM 调用次数可能比拆 agent 更有效 |
 
 ---
 
-## 跨平台陷阱
+## 脆弱点清单
 
-| 平台 | 安装命令 | 隐藏依赖 | 失败率（首次）|
-|-----|---------|---------|-------------|
-| **Windows** | `npm install canvas` | Visual Studio Build Tools + GTK2 Runtime + Python | 高（>60%）|
-| **macOS** | `brew install pkg-config cairo pango libpng jpeg giflib librsvg` 然后 `npm install canvas` | Xcode Command Line Tools | 中（30%，主要是 Apple Silicon 下 brew 路径）|
-| **Linux (Debian/Ubuntu)** | `apt install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev` | 需 sudo | 低（<10%）|
-| **Linux (Alpine/Docker)** | `apk add cairo-dev pango-dev jpeg-dev giflib-dev` | 缺 musl 兼容字体 | 中 |
+### 🔴 高风险
 
-**真正的坑**：node-canvas 主仓推荐了 `@napi-rs/canvas`（Rust 实现，纯预编译二进制，无原生依赖）。**强烈建议把"canvas"换成"@napi-rs/canvas"**——API 99% 兼容，安装零依赖，跨平台体验完全不同。change-requests.md 没考虑这个选项。
+1. **附件复用计数的多 agent 竞态条件**
+   - 描述：attachment-matcher 和 data-coordinator 都可能读写 `_index.json` 的 `used_in` 字段
+   - 影响：并发执行时附件可能被复用超过 2 次，违反硬性约束
+   - 缓解：必须由单一 agent 独占附件索引的读写，或回退到 Python 脚本维护索引
 
----
+2. **同质化检查的「全局视野」缺失**
+   - 描述：validate.py 的 batch check 需要全量题目计算 pairwise similarity、length variance、structural hash
+   - 影响：如果 quality-validator 只检查单题或分批检查，无法发现跨批次的结构同质化
+   - 缓解：必须等全部题目生成后再做 batch validation，这意味着「并行生成 + 串行验证」的架构，而非每个题生成后立即验证
 
-## 字体许可与分发
+3. **附件格式占比（PDF>=20%, Excel>=20%）可能无法满足**
+   - 描述：当前 attachments_manifest.yaml 中 8 个 topic 的附件几乎全是 PDF，Excel 附件极少
+   - 影响：如果 agent 严格执行格式占比要求，可能频繁触发重试甚至死循环
+   - 缓解：Phase 0 应确认此约束的优先级，或要求先补充 Excel 附件源
 
-| 字体 | 许可 | 可分发 | 风险 |
-|-----|------|-------|------|
-| 思源黑体 (Noto Sans SC) | SIL OFL 1.1 | ✅ | 无 |
-| Noto Color Emoji | SIL OFL 1.1 | ✅ | 体积 24MB |
-| 微软雅黑 / 苹方 | 商用，禁分发 | 🔴 | 严重 |
-| 方正/汉仪等 | 商用 | 🔴 | 严重 |
+4. **Agent 生成题目的格式稳定性**
+   - 描述：现有 `generate_question.py` 有三层 parser 回退（XML → JSON → regex），agent 直接生成可能输出不符合 CSV schema 的内容
+   - 影响：CSV 字段缺失或格式错误导致下游无法使用
+   - 缓解：保留 `generate_question.py` 作为 agent 调用的工具，而非让 agent 直接生成原始文本
 
-**风险点**：
-1. 用户克隆 team 后自行替换 `assets/fonts/` 内容，若放入商用字体并提交，team 维护者需在 README 明确 disclaimer
-2. v5 应在 `infra` 阶段写 `assets/fonts/LICENSE.md` 列出每个字体的来源和许可
-3. 加一个 `pre-tool-safety.js` hook 检查 Write 到 `assets/fonts/` 时提示许可证审核
+### 🟡 中风险
 
----
+5. **主题覆盖 7 个 L1 的随机性风险**
+   - 描述：seed_pool.py 的随机采样可能无法均匀覆盖 7 个一级类目
+   - 影响：某批次可能遗漏某个 L1，违反覆盖要求
+   - 缓解：在采样逻辑中加入「强制覆盖」约束，而非依赖 agent 事后检查
 
-## 反对的假设
+6. **自动重试的无限循环风险**
+   - 描述：验证不通过自动重试，如果 prompt 或种子本身有问题，可能无限重试
+   - 影响：消耗大量 token 和时间，无有效产出
+   - 缓解：设置重试上限（如每题最多 3 次），超限标记为失败并继续
 
-### 假设 1："Canvas 的字体生态丰富，与小红书前端审美对齐"
-**反对**：小红书 App 前端用的是系统字体（iOS 苹方 / Android 思源），Canvas 在服务端渲染**永远拿不到苹方**（受版权限制）。所谓"审美对齐"是错觉——只是 Pillow 默认中文字体丑陋让人误以为换 Canvas 就好看。Pillow 用 `Source Han Sans` 也能渲染相同效果。**真正的差距在字体文件本身，而非渲染引擎。**
-
-### 假设 2："image2 角色简化使决策树更清晰"
-**反对**：v4 的 image2 既能生成又能编辑，灵活性高。v5 砍掉编辑能力意味着**用户提示"把这张照片调成黄昏色调"无法实现**——只能要么直接用素材，要么 image2 生成全新图。砍掉 edit endpoint 是产品功能回退，不是简化。
-
----
-
-## 测试盲区
-
-v4 Pillow 路径需要在 v5 重点验证的行为：
-
-| 行为 | v4 (Pillow) | v5 (Canvas) 风险点 |
-|-----|------------|-------------------|
-| 中文标题超长自动换行 | `textwrap` + `getbbox` | Canvas 无内置换行，需手写 `measureText` 二分 |
-| Emoji 渲染（🔥💯）| Pillow 默认不支持，需 `pilmoji` | node-canvas 需注册 Color Emoji 字体且同时注册中文字体，font fallback 顺序敏感 |
-| 长文本描边（4-8px stroke）| `stroke_width` 参数 | Canvas 的 `strokeText` 在中文字下会出现笔画粘连，需 `lineJoin: "round"` |
-| JPG 输出色彩 | Pillow `quality=95` | node-canvas `toBuffer('image/jpeg', { quality: 0.95 })` 颜色配置文件不同（sRGB vs Display P3）|
-| 透明 PNG 合成顺序 | `Image.alpha_composite` | Canvas `globalCompositeOperation` 默认 `source-over`，alpha 计算精度差异 |
-| 大图缩放（>4K → 1024）| Pillow `LANCZOS` | Canvas `imageSmoothingQuality='high'` 在 node-canvas 下实际是 bilinear，质量差 |
-
-**至少要写 6 个回归测试用例，每个对应 v4 的真实出图场景。**
+7. **Context Compaction 可能过早触发**
+   - 描述：visionary-tech 和 toolsmith-agents 被标记为支持 Context Compaction
+   - 影响：对于只有 5 个 agent 的 team，context 不太可能溢出，过早 compaction 反而丢失细节
+   - 缓解：仅在 agent 提示词中声明支持，不强制触发
 
 ---
 
-## 折中方案
+## 过度设计预警
 
-如果用户不愿冒迁移风险，建议提供**双引擎并存的过渡方案**：
+| 组件 | 是否必要 | 理由 |
+|------|---------|------|
+| 独立 topic-planner agent | **可简化** | 主题采样是确定性算法（seed_pool.py），agent 只需调用脚本并确认 L1 覆盖，不需要独立 agent |
+| 独立 attachment-matcher agent | **可简化** | `run_from_manifest.py` 已改为「强制使用真实附件清单」，agent 只需从给定列表选择，匹配逻辑已内嵌 |
+| 独立 quality-validator agent | **可简化** | 验证是确定性脚本（validate.py），agent 调用脚本即可，不需要独立 agent 做「智能判断」 |
+| 独立 data-coordinator agent | **可简化** | CSV 写入和重试触发可由生成 agent 或验证 agent 兼任，线性流程无需专职协调者 |
+| Context Compaction | **不必要** | 5 个 agent 的 team 规模小，单 agent 处理的文件和上下文有限，不太可能触发溢出 |
+| Worktree 隔离（Phase 4b） | **收益低** | 5 个 agent 文件的生成工作量很小，worktree 的隔离收益远低于管理成本 |
+| Self-Improving / Instincts | **不必要** | 题目生成是批处理任务，非长期运行服务，学习积累的价值有限 |
 
+**最简可行架构建议**：
 ```
-image-processor
-  ├── 读 ENGINE 环境变量（"canvas" | "pillow"，默认 "canvas"）
-  ├── ENGINE=canvas → 调 canvas-image-composer skill
-  └── ENGINE=pillow → 调 v4 的 image_pipeline.py（保留）
+用户输入题目数量
+    │
+    ▼
+question-producer（调用 seed_pool.py + generate_question.py + 附件选择）
+    │
+    ▼
+quality-coordinator（调用 validate.py batch check + CSV 输出 + 失败重试调度）
+    │
+    ▼
+输出 CSV + 附件包
 ```
 
-具体落地：
-1. **不删除 `scripts/image_pipeline.py`**，仅标记 deprecated
-2. v5 的 `image-processor.md` 加一段："如 Canvas 安装失败，设置 `IMAGE_ENGINE=pillow` 临时回退"
-3. 直到 v6 再彻底删除 Pillow 路径
-4. 在 `output-validator` 加一项检查：如果 Canvas 跑通则建议下版本删 Pillow
+---
 
-**理由**：v4 的 Pillow 路径是已验证的安全网。当 node-canvas Windows 安装失败时（基于跨平台陷阱章节，概率 >50%），用户至少能把 ENGINE 切回 pillow 继续工作。这是 1 个文件的成本换 50% 用户的可用性。
+## 对现有流水线代码的依赖分析
+
+现有代码质量高，不应「为了 agent 化而 agent 化」：
+
+| 脚本 | 质量评估 | Agent 化建议 |
+|------|---------|-------------|
+| `seed_pool.py` | 高（确定性算法，含行业亲和性、去重日志）| **保留为工具**，agent 调用即可 |
+| `generate_question.py` | 高（三层 parser 回退、retry、API 封装）| **保留为工具**，agent 提供 seed 和参数 |
+| `validate.py` | 高（per-row + batch 双层级、6 项同质化检查）| **保留为工具**，agent 调用并解析结果 |
+| `fetch_attachments.py` | 高（下载、索引、MD5、SSL 处理）| **保留为工具**，agent 按需调用 |
+| `run_daily.py` | 高（ThreadPoolExecutor 并行、retry、CSV 输出）| **参考其流程设计 agent 协作逻辑** |
+| `run_from_manifest.py` | 高（真实附件强制约束、索引更新、文件复制）| **核心参考**，其「强制附件清单」模式应被 agent 继承 |
+
+**关键洞察**：`run_from_manifest.py` 已经解决了「附件名称与内容对应」的核心痛点（通过强制使用真实附件清单）。这比拆成 5 个 agent 更有价值，agent 设计应继承此模式而非重新发明。
 
 ---
 
-## 总结一句话
+## 关键控制点
 
-**Canvas 替换 Pillow 在视觉上的收益（中文字体好看一点）远不及在分发维护上的成本（Windows 60% 安装失败 + Cairo 静默渲染缺陷 + 字体合规风险）。强烈建议：① 改用 @napi-rs/canvas 替代 node-canvas；② Pillow 路径保留为 fallback 至少一个版本；③ Canvas skill 简化为 3 个固定模板而非通用合成原语。**
+### 必须把关（🔴 不可妥协）
+
+1. **附件索引的单一写入者**
+   - 无论架构如何拆分，`_index.json` 的 `used_in` 字段必须由单一组件维护，禁止多 agent 并发写入
+   - 建议：由 quality-coordinator 在最终 CSV 输出前统一更新索引
+
+2. **Batch Validation 的全量执行**
+   - 同质化检查必须在全部题目生成后执行，不能逐题或分批验证
+   - 建议：生成阶段只保留 per-row 检查，batch check 作为最终 gate
+
+3. **附件格式占比的预检**
+   - 在生成前检查 manifest 中各 topic 的附件格式分布，如果无法满足 PDF>=20% + Excel>=20%，提前告警而非生成后失败
+
+4. **生成输出的 Schema 约束**
+   - 即使 agent 直接生成题目，也必须通过 `generate_question.py` 的 parser 或 `validate.py` 的 per-row check，确保字段完整
+
+### 建议把关（🟡 重要但可降级）
+
+5. **重试上限**：每题最多 3 次重试，超限跳过避免无限循环
+6. **L1 覆盖预检**：采样后、生成前检查是否覆盖 7 个 L1，未覆盖则补充种子
+7. **附件复用预检**：生成前计算理论最大复用次数，避免生成后才发现超用
+
+---
+
+## 对 Strategic 分析的预设反驳
+
+（Strategic 文件内容似乎与当前需求不匹配，内容为 video-commerce-creator 的分析。以下为基于题目工厂需求的独立批判。）
+
+1. **如果 Strategic 建议保留 5-agent 设计以「与原有流水线模块一一对应」**：
+   - 反驳理由：Python 模块拆分是为了代码组织（单一职责），Agent 拆分应基于「独立决策需求」和「并行收益」。原有流水线在 Python 中已是串行执行（run_daily.py 顺序调用），没有并行模块，不需要对应拆成 5 个 agent。
+
+2. **如果 Strategic 强调「每个 agent 负责一个认知环节」**：
+   - 反驳理由：题目生成是高度结构化的批处理任务，不是开放域的多步推理。现有 Python 脚本已经封装了所有「认知环节」，agent 的价值在于「协调和决策」而非「替代脚本的计算逻辑」。
+
+3. **如果 Strategic 建议增加 agent 做「附件内容理解」或「题目创意发散」**：
+   - 反驳理由：`run_from_manifest.py` 的「强制附件清单」模式已经消除了附件理解的需求（附件内容和用途在 manifest 中已预定义）。题目创意受限于种子池的组合，不需要额外发散。
+
+---
+
+## 推荐的最简可行架构
+
+与当前 5-agent 设计对比：
+
+| 维度 | 当前设计（5 agent） | 推荐最简（2 agent） |
+|------|-------------------|-------------------|
+| 主题规划 | topic-planner | 内嵌到 question-producer（调用 seed_pool.py） |
+| 题目生成 | question-generator | question-producer（调用 generate_question.py） |
+| 附件匹配 | attachment-matcher | 内嵌到 question-producer（从 manifest 强制选择） |
+| 质量验证 | quality-validator | quality-coordinator（调用 validate.py） |
+| CSV 输出 | data-coordinator | quality-coordinator（调用 csv writer） |
+| 重试调度 | data-coordinator | quality-coordinator（统一调度） |
+| 附件索引更新 | attachment-matcher + data-coordinator | quality-coordinator（单一写入者） |
+
+**优势**：
+- 减少 3 个 agent 的上下文切换和文件传递开销
+- 附件索引由单一 agent 维护，消除竞态条件
+- Batch validation 天然在全部生成后执行
+- 保留所有高质量 Python 脚本作为工具，不重复造轮子
+- 更符合现有 `run_from_manifest.py` 的成功实践
+
+---
+
+## 总结
+
+题目工厂的 Agent Team 设计面临的核心矛盾是：**现有 Python 流水线已经高度成熟和自动化，Agent 化的价值不在于「拆分更多步骤」，而在于「提供更高层的协调和决策接口」**。
+
+建议采用 **2-agent 最简架构**，将 5 个模块的认知负载合并为「生成」和「验证输出」两个环节，底层全部复用现有脚本。如果后续需要扩展（如增加人工审核节点、多批次并行生成），再逐步拆分为 3-4 个 agent。

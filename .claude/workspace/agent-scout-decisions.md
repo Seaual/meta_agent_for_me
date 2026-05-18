@@ -1,109 +1,158 @@
-# Agent Scout 决策表 — v5 升级模式
+## Agent 复用决策
 
-## 升级模式说明
-
-本次为 **v4 → v5 实现层局部替换升级**：
-- v4 已有 10 个 agent，对外接口（输入/输出契约）100% 兼容保留
-- **唯一重写**：image-processor（Pillow → @napi-rs/canvas）
-- 其余 9 个 agent **沿用 v4**（toolsmith-agents 直接 cp 文件即可，无需修改）
-
-**v5 实际 agent 清单**（来自 phase-1-architecture.md §2，与 v4 目录一一对应）：
-
-| # | Agent | v4 目录中是否存在 |
-|---|-------|---------------|
-| 1 | article-analyzer | ✅ |
-| 2 | style-synthesizer | ✅ |
-| 3 | image-prompt-analyzer | ✅ |
-| 4 | image-prompt-synthesizer | ✅ |
-| 5 | image-recognizer | ✅ |
-| 6 | content-creator | ✅ |
-| 7 | keyword-guard | ✅ |
-| 8 | xiaohongshu-policy-guard | ✅ |
-| 9 | image-matcher | ✅ |
-| 10 | image-processor | ✅（v5 重写） |
-
-> 注：本任务上游说明中列出的 content-strategist / trend-researcher / copywriter / image-creator / seo-optimizer / quality-reviewer / performance-tracker / publishing-coordinator / self-improving-agent 与 v4 实际目录不符。**以 phase-1-architecture.md 和 v4 实际目录为准**（已与架构方案 §2 Agent 矩阵对齐）。
+**Team**: 题目工厂 (Question Factory)
+**搜索时间**: 2026-05-18
+**搜索范围**: VoltAgent (主库, 141 agents) + agency-agents (备选库, 184 agents)
+**评估依据**: phase-2-tech-specs.md 中「Agent 搜索提示」表格
 
 ---
 
-## 总览
+### 评估方法
 
-| Agent | 决策 | 评分 | 来源 | 理由 |
-|-------|-----|------|------|------|
-| article-analyzer | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/article-analyzer.md` | v5 未变更，直接复制 |
-| style-synthesizer | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/style-synthesizer.md` | v5 未变更，直接复制 |
-| image-prompt-analyzer | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/image-prompt-analyzer.md` | v5 未变更，直接复制 |
-| image-prompt-synthesizer | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/image-prompt-synthesizer.md` | v5 未变更，直接复制 |
-| image-recognizer | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/image-recognizer.md` | v5 未变更，直接复制 |
-| content-creator | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/content-creator.md` | v5 未变更，直接复制 |
-| keyword-guard | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/keyword-guard.md` | v5 未变更，直接复制 |
-| xiaohongshu-policy-guard | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/xiaohongshu-policy-guard.md` | v5 未变更，直接复制 |
-| image-matcher | 沿用 v4 | N/A | `xiaohongshu-content-creator_teams_v4/.claude/agents/image-matcher.md` | v5 未变更，直接复制 |
-| **image-processor** | **原创 v5** | 见下表 | UX 规格 `phase-2-ux-specs.md` | Pillow→Canvas 实现层完全替换，对外接口兼容；按 UX 规格全新生成 |
+| 维度 | 满分 | 说明 |
+|-----|------|------|
+| 职责匹配度 | 40 | 候选 description vs 目标职责 |
+| Prompt 质量 | 20 | 五层结构完整度、边界处理、降级策略 |
+| 工具权限兼容 | 20 | allowed-tools 差异，完全一致=20 |
+| 定制改造成本 | 20 | 需修改比例：<10%=20, 10-30%=15, 30-60%=8, >60%=2 |
+
+**决策阈值**：≥70 直接复用 | 50-69 改编复用 | 30-49 参考原创 | <30 纯原创
 
 ---
 
-## image-processor 复用搜索结果
+### 决策总览
 
-### 搜索范围
-
-| 库 | 路径 | 状态 |
-|---|------|------|
-| VoltAgent 主库 | `./awesome-claude-code-subagents` | 不存在（未 clone） |
-| agency-agents 备库 | `./agency-agents` | 不存在（未 clone） |
-
-> 两个外部库均未在本机就位。即便就位，本场景为「严格按既有 UX 规格 + Tech 规格重写实现层」的版本升级，外部 agent 与本场景的契约（双审查阻塞 / canvas config 路径 / image2 generations 兜底 / 部分失败重试 2 次 / image-processor-output.md 格式）耦合度极低，候选可参考价值低。
-
-### 评分（假设 VoltAgent 中存在通用 image-rendering agent）
-
-| 候选 | 领域匹配(30) | Prompt完整度(25) | 工具权限合理(20) | 输出格式适配(15) | 可定制性(10) | 总分 |
-|------|------------|---------------|-------------|-------------|----------|------|
-| (假设) VoltAgent/image-processor 通用版 | 8 | 12 | 10 | 3 | 5 | **38** |
-| (假设) agency-agents/image-renderer | 6 | 10 | 8 | 2 | 5 | **31** |
-
-**评分理由**：
-- 领域匹配低：通用 image-rendering agent 不会知道「image2 generations 兜底」「双审查阻塞」「.canvas/{N}.json 临时配置」等小红书工作流的特定契约
-- Prompt 完整度：缺少 v5 UX 规格中要求的 4 个 example 块和 9 步处理路径
-- 输出格式不匹配：v5 要求 `image-processor-output.md` 含三模式枚举（素材复用/image2 兜底/Canvas 合成），通用 agent 不会有此结构
-- 改造成本 > 70%
-
-### 结论
-
-**评分 < 65 → 原创**。直接基于 `phase-2-ux-specs.md` 中已精雕的 5 层 prompt（角色定位 / 核心职责 / 分析流程 9 步 / 输出格式 / 边缘情况）+ 4 个 example 块生成，无可参考的优质外部候选。
+| Agent名称 | 决策 | 候选文件 | 得分 | 改编要点 |
+|---------|------|---------|------|---------|
+| topic-planner | ✏️ 原创 | 无合适候选 | 29（最高） | — |
+| question-generator | ✏️ 原创 | prompt-engineer（VoltAgent） | 42 | 可参考其五层 prompt 结构设计 |
+| attachment-matcher | ✏️ 原创 | document-generator（agency-agents） | 35 | 可参考其多格式文件处理逻辑 |
+| quality-validator | ✏️ 原创 | ai-data-remediation-engineer（agency-agents） | 47 | 可参考其语义聚类 + 异常评分机制 |
+| data-coordinator | ✏️ 原创 | agents-orchestrator（agency-agents） | 42 | 可参考其重试循环 + QA gate 模式 |
 
 ---
 
-## 给 toolsmith-agents 的执行指令
+### Agent 参考候选
 
-### 9 个沿用 v4 的 agent（直接 cp）
+| 目标 Agent | Top 候选 | 来源 | 得分 | 可参考的设计点 |
+|-----------|---------|------|------|------------|
+| topic-planner | podcast-strategist | agency-agents | 29 | 内容规划的分层结构（主题 → 子主题 → 内容点） |
+| question-generator | prompt-engineer | VoltAgent | 42 | 五层 prompt 结构（Context / Instruction / Constraints / Examples / Output Format） |
+| attachment-matcher | document-generator | agency-agents | 33 | 多格式文件处理（PDF/XLSX 识别与分类） |
+| quality-validator | ai-data-remediation-engineer | agency-agents | 47 | 语义聚类 + 异常评分 + 检查清单模式 |
+| data-coordinator | agents-orchestrator | agency-agents | 42 | 重试循环（retry loop）+ QA gate + 状态机 |
 
-```bash
-V4_DIR="xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v4/.claude/agents"
-V5_DIR="$OUTPUT_DIR/.claude/agents"
-mkdir -p "$V5_DIR"
+---
 
-for agent in article-analyzer style-synthesizer image-prompt-analyzer \
-             image-prompt-synthesizer image-recognizer content-creator \
-             keyword-guard xiaohongshu-policy-guard image-matcher; do
-  cp "$V4_DIR/${agent}.md" "$V5_DIR/${agent}.md"
-done
-```
+### 详细评分
 
-**不需要修改任何字段**。这 9 个 agent 的 frontmatter（name / description / allowed-tools / model / color）与 system prompt 在 v5 中保持原状。
+#### 1. topic-planner（主题规划器）
 
-### 1 个原创：image-processor（v5 重写）
+**目标职责**：从种子池（seeds/*.yaml）采样主题组合，确保 L1 类目全覆盖，输出 topic-plan.json。
+**目标权限**：Read, Write
 
-- 来源：完全按 `.claude/workspace/phase-2-ux-specs.md` 中 image-processor 章节生成
-- 必含：5 层 prompt 结构 + 4 个 example 块 + 9 步处理路径
-- 工具权限：`Read, Write, Bash`（按 `phase-2-tech-specs.md` 的 Bash 白名单）
-- 关键 Bash 命令：`node scripts/canvas/compose.js <config.json>`
-- 输出契约：`output/{name}/images/*.jpg` + `image-processor-output.md`（处理模式枚举为「素材复用 / image2 兜底 / Canvas 合成」）
-- **不要复制 v4 image-processor.md**（v4 含 Pillow / Python 路径，v5 全部删除）
+| 候选 | 来源 | 职责匹配 | Prompt质量 | 工具兼容 | 改造成本 | 总分 |
+|-----|------|---------|-----------|---------|---------|------|
+| content-marketer | VoltAgent 08-business-product | 8/40 | 8/20 | 20/20 | 2/20 | 29 |
+| podcast-strategist | agency-agents marketing | 10/40 | 8/20 | 20/20 | 2/20 | 29 |
+| trend-analyst | VoltAgent 10-research-analysis | 8/40 | 10/20 | 20/20 | 2/20 | 28 |
+| research-analyst | VoltAgent 10-research-analysis | 8/40 | 10/20 | 20/20 | 2/20 | 28 |
 
-### 校验清单
+**分析**：题目工厂的 topic-planner 是高度垂直化的种子池采样器，需要理解 seeds/*.yaml 的结构、L1/L2 类目体系、附件格式配额（PDF 25%/Excel 25%）。现有库中无任何 agent 涉及「从结构化种子池采样并确保类目覆盖」的职责。
 
-- [ ] v5 目录共有 10 个 .md 文件
-- [ ] 9 个文件与 v4 字节级一致（除 image-processor）
-- [ ] image-processor.md frontmatter 含 `allowed-tools: Read, Write, Bash`
-- [ ] image-processor.md 提示词中无 "Pillow" / "Python" / "image_pipeline.py" 字样
-- [ ] image-processor.md 包含 4 个 `<example>` 块（双审查通过 / 缺素材兜底 / 中文换行 / 部分失败）
+---
+
+#### 2. question-generator（题目生成器）
+
+**目标职责**：基于种子和 prompt 模板生成结构化题目，支持自然语言生成 + parser 兜底，输出 questions-batch-N.json。
+**目标权限**：Read, Write, Bash
+
+| 候选 | 来源 | 职责匹配 | Prompt质量 | 工具兼容 | 改造成本 | 总分 |
+|-----|------|---------|-----------|---------|---------|------|
+| prompt-engineer | VoltAgent 05-data-ai | 15/40 | 14/20 | 16/20 | 8/20 | 42 |
+| llm-architect | VoltAgent 05-data-ai | 10/40 | 12/20 | 16/20 | 6/20 | 35 |
+| technical-writer | VoltAgent 08-business-product | 10/40 | 10/20 | 16/20 | 6/20 | 33 |
+| marketing-zhihu-strategist | agency-agents marketing | 12/40 | 10/20 | 14/20 | 6/20 | 35 |
+
+**分析**：question-generator 需要深度理解题目工厂的业务规则（标题 300-1800 字、任务编号 ≥2、附件 5-8 个、时效锚点、无《》无 URL 等），并兼容现有 prompts/question_template.md 的五层结构。prompt-engineer 虽然涉及 prompt 设计，但完全不涉及题目内容生成和结构化输出。
+
+**可参考设计点**：prompt-engineer 的五层 prompt 结构（Context / Instruction / Constraints / Examples / Output Format）可作为 question-generator 的 prompt 设计参考。
+
+---
+
+#### 3. attachment-matcher（附件匹配器）
+
+**目标职责**：根据题目种子匹配 attachments_manifest.yaml 中的附件，维护 _index.json 复用索引（每附件最多复用 2 次），输出 questions-with-attachments.json。
+**目标权限**：Read, Write, Bash
+
+| 候选 | 来源 | 职责匹配 | Prompt质量 | 工具兼容 | 改造成本 | 总分 |
+|-----|------|---------|-----------|---------|---------|------|
+| identity-graph-operator | agency-agents specialized | 8/40 | 10/20 | 16/20 | 6/20 | 29 |
+| document-generator | agency-agents specialized | 10/40 | 10/20 | 16/20 | 6/20 | 33 |
+| data-engineer | VoltAgent 05-data-ai | 10/40 | 12/20 | 16/20 | 6/20 | 35 |
+| report-distribution-agent | agency-agents specialized | 12/40 | 10/20 | 16/20 | 6/20 | 35 |
+
+**分析**：attachment-matcher 的核心是「根据题目种子的主体+切入映射到 attachments_manifest.yaml 的 topic，维护 used_in <= 2 的复用约束」。现有库中无任何 agent 涉及文件复用索引管理。
+
+**可参考设计点**：identity-graph-operator 的模糊匹配逻辑（fuzzy matching）可作为附件-题目相似度匹配的参考；document-generator 的多格式文件处理能力可作为附件格式检查（PDF/Excel 比例）的参考。
+
+---
+
+#### 4. quality-validator（质量验证器）
+
+**目标职责**：执行逐行检查（字段、长度、格式、时效性）+ 批量同质化检查（pairwise similarity、结构 hash、范式分布），输出 validation-report.json。
+**目标权限**：Read, Write, Bash
+
+| 候选 | 来源 | 职责匹配 | Prompt质量 | 工具兼容 | 改造成本 | 总分 |
+|-----|------|---------|-----------|---------|---------|------|
+| code-reviewer | VoltAgent 04-quality-security | 10/40 | 14/20 | 16/20 | 6/20 | 37 |
+| qa-expert | VoltAgent 04-quality-security | 12/40 | 12/20 | 16/20 | 6/20 | 37 |
+| compliance-auditor | VoltAgent 04-quality-security | 10/40 | 12/20 | 16/20 | 6/20 | 35 |
+| ai-data-remediation-engineer | agency-agents engineering | 18/40 | 12/20 | 16/20 | 8/20 | 47 |
+| model-qa | agency-agents specialized | 10/40 | 10/20 | 16/20 | 6/20 | 33 |
+| test-results-analyzer | agency-agents testing | 10/40 | 10/20 | 16/20 | 6/20 | 33 |
+
+**分析**：quality-validator 的批量同质化检测（H1-H6 规则：pairwise similarity <30%、标题长度差异、相同开头、结构 hash、范式分布、附件复用）是题目工厂特有的质量模型，与通用的数据异常检测或软件 QA 完全不同。ai-data-remediation-engineer 虽然涉及语义聚类和相似度检查，但其目标是「修复数据异常」而非「验证内容同质化」。
+
+**可参考设计点**：ai-data-remediation-engineer 的语义聚类逻辑（semantic clustering）和异常评分机制可作为 quality-validator 的同质化检测算法参考；qa-expert 的检查清单（checklist）模式可作为逐行验证的格式参考。
+
+---
+
+#### 5. data-coordinator（数据协调器）
+
+**目标职责**：汇总所有通过验证的题目，生成标准化 CSV（UTF-8-SIG）、复制附件到 output/attachments/、管理重试循环（最多 3 轮）、标记需人工审核题目，输出 final-summary.md。
+**目标权限**：Read, Write, Bash
+
+| 候选 | 来源 | 职责匹配 | Prompt质量 | 工具兼容 | 改造成本 | 总分 |
+|-----|------|---------|-----------|---------|---------|------|
+| data-analyst | VoltAgent 05-data-ai | 12/40 | 12/20 | 16/20 | 6/20 | 37 |
+| data-engineer | VoltAgent 05-data-ai | 15/40 | 12/20 | 16/20 | 8/20 | 42 |
+| workflow-orchestrator | VoltAgent 09-meta-orchestration | 12/40 | 12/20 | 16/20 | 6/20 | 37 |
+| multi-agent-coordinator | VoltAgent 09-meta-orchestration | 10/40 | 12/20 | 16/20 | 6/20 | 35 |
+| task-distributor | VoltAgent 09-meta-orchestration | 10/40 | 10/20 | 16/20 | 6/20 | 33 |
+| agents-orchestrator | agency-agents specialized | 15/40 | 12/20 | 16/20 | 8/20 | 42 |
+| workflow-architect | agency-agents specialized | 12/40 | 12/20 | 16/20 | 8/20 | 39 |
+| accounts-payable-agent | agency-agents specialized | 10/40 | 10/20 | 16/20 | 6/20 | 33 |
+| report-distribution-agent | agency-agents specialized | 12/40 | 10/20 | 16/20 | 6/20 | 35 |
+
+**分析**：data-coordinator 是题目工厂流水线的「收口」agent，需要理解全部中间文件格式（topic-plan.json → questions-batch-N.json → questions-with-attachments.json → validation-report.json → retry-batch.json），执行 CSV 格式化（含 BOM）、附件目录组织、重试状态机（retry_count >= 3 → needs_manual_review）。现有库中的 data-engineer 或 agents-orchestrator 虽然涉及数据管道或重试，但完全不涉及题目工厂的垂直业务逻辑。
+
+**可参考设计点**：
+- agents-orchestrator 的重试循环模式（retry loop + QA gate）可作为 data-coordinator 重试状态机的参考
+- workflow-architect 的 timeout/cleanup 模式可作为 data-coordinator 异常处理的参考
+- report-distribution-agent 的 territory routing 逻辑可作为「按 uid 组织附件子目录」的参考
+
+---
+
+### 验证结论
+
+Visionary-Tech 的预判正确：**题目工厂是垂直领域专用流水线，5 个 agent 均为原创设计，无现成 agent 可直接复用。**
+
+所有候选 agent 的得分均低于 50 分的改编复用阈值，最高分为 quality-validator 的 ai-data-remediation-engineer（47 分），属于「可参考设计模式」级别。
+
+**建议**：在原创设计时，吸收上述 Top 候选的可用设计模式：
+1. **五层 prompt 结构**（prompt-engineer）：Context / Instruction / Constraints / Examples / Output Format
+2. **重试循环状态机**（agents-orchestrator）：retry loop + QA gate + 状态转换
+3. **语义聚类评分**（ai-data-remediation-engineer）：异常检测 + 聚类 + 评分机制
+4. **检查清单模式**（qa-expert）：结构化 checklist + 分级严重程度
+5. **多格式文件处理**（document-generator）：PDF/XLSX 识别与分类表格

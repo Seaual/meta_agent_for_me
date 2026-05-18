@@ -1,1 +1,5 @@
 done
+2026-05-18
+agents searched: 5
+decisions: 5 original
+libraries: VoltAgent + agency-agents

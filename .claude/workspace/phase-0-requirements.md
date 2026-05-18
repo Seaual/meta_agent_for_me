@@ -1,48 +1,44 @@
-# Phase 0 — 版本升级需求摘要（v4 → v5）
+# Phase 0 — 需求收集
 
-## 升级基础（v4 现状）
+## Q1: 目标描述
+将 D:\题目工厂 的垂域高难度题目数据生产流水线转化为 Agent Team，替代原有 Python 脚本的核心决策、生成、验证、协调环节。底层文件操作（CSV 写入、附件下载）保留为 agent 可调用的工具脚本。
 
-**Team 名称**：xiaohongshu-content-creator
-**版本路径**：v3（基础版）→ v4（素材索引+识图）→ v5（Canvas 合成引擎）
-**Agent 数量**：v4 共 10 个 agent（保持不变）
-**Skill 数量**：v4 共 4 个 skill（v5 新增 canvas-image-composer，共 5 个）
+## Q2: 输入
+以题目数量为主要输入（如"生成 50 道题"），主题/类目由团队从种子池自动选取。
 
-### v4 团队结构（保持的部分）
+## Q3: 输出
+- **主输出**：标准化 CSV（含 uid、题目、类目、任务概括、专家年限、完成时间、附件清单、产物格式等字段）
+- **辅助输出**：附件文件（PDF/Excel/Word 等，5-8 个/题）
+- **验证报告**：同质化检查 + 时效性检查 + 附件合规检查
+- 输出到 `output/` 目录
 
-```
-工作组 A（文字提炼）：article-analyzer → style-synthesizer
-工作组 B（图片提炼）：image-prompt-analyzer → image-prompt-synthesizer
-素材索引组：image-recognizer
-生成组：content-creator → keyword-guard ∥ xiaohongshu-policy-guard → image-matcher → image-processor
-```
+## Q4: 核心流程
+1. **topic-planner**：从 `seeds/topics.yaml` + `companies.yaml` 选取/组合主题，确保覆盖 7 个一级类目
+2. **question-generator**：基于主题和 `prompts/question_template.md` 生成题目正文（含业务背景、核心任务、关键限制、参考依据）
+3. **attachment-matcher**：根据题目内容，从 `attachments_manifest.yaml` 匹配或调用工具生成附件，确保每题 5-8 个、每附件最多复用 2 次
+4. **quality-validator**：执行同质化检查（相似度≤30%、长度差异、句式多样化）+ 时效性检查 + 附件合规检查
+5. **data-coordinator**：汇总为标准化 CSV，输出到 `output/` 目录；验证不通过时触发自动重试/重写
 
-## v5 核心变更需求
+## Q5: 技术需求
+- Python 脚本复用：原有 `generate_question.py`、`validate.py`、`fetch_attachments.py` 等保留为 agent 可调用的工具脚本
+- 题目生成由 agent 直接完成（自然语言生成），无需硬编码 LLM API 调用
+- 文件系统操作：附件存储、CSV 输出需要 Bash/Write 权限
+- 种子/配置读取：`seeds/`、`prompts/`、`*.yaml` 等配置文件
 
-### 用户原文
-> 改进 v4，现在将 pillow 替换为 canvas，生成图片带字体的，可能需要一个 canvas 的 skill，让他生成图片，最后，image2 作为生成 output 素材图的就行。
+## Q6: 质量要求
+- 题目需经同质化检查（相似度、长度、句式、结构）
+- 附件名称与内容对应，格式合规
+- 时效性：出现"当前/最新"必须补充时间点
+- 每题 5-8 个附件，每附件最多复用 2 次
+- 验证不通过时自动重试/重写，无需人工审核
 
-### 三个明确变更点
-1. **替换图像合成引擎**：Pillow（Python）→ Canvas（Node.js node-canvas）
-2. **新增 Canvas Skill**：封装合成原语，特别支持字体渲染
-3. **image2 角色简化**：仅用于生成 output 素材图（替代 image-examples/materials/ 缺失时的兜底）
+## Q7: 团队规模偏好
+5 个 agent（标准型），与原有流水线模块一一对应：
+topic-planner, question-generator, attachment-matcher, quality-validator, data-coordinator
 
-## 运行时配置（继承 v4）
-
-- **profile**：standard（与 v4 一致，保持稳定）
-- **self-improving**：yes（保留学习能力）
-- **instincts**：yes（保留两层学习结构）
-
-## 不在本次范围
-
-- 不改变 articles/ 目录结构
-- 不改变 image-examples/ 分区结构
-- 不改变 output/ 输出结构
-- 不改变其他 9 个 agent 的核心职责（仅 image-processor 内部实现切换）
-- 不新增 agent（保持 10 个 agent）
+## Q8: 运行时 Profile
+minimal（仅基础安全检查，适合个人项目和快速原型）
 
 ## 关键约束
-
-1. v5 必须能在 Windows / macOS / Linux 三平台运行（node-canvas 跨平台）
-2. 字体文件必须可与 Team 一起分发（assets/fonts/ 目录）
-3. image-processor 的对外接口（输入/输出）保持 v4 兼容
-4. canvas-image-composer skill 必须可被其他 team 复用（独立性）
+- 完全基于 D:\题目工厂 现有逻辑和文件进行设计
+- Agent 负责思考/决策/生成/审查，Python 脚本降级为工具/胶水代码

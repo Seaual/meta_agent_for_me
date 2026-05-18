@@ -1,0 +1,68 @@
+{
+  "skipDangerousModePermissionPrompt": true,
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash",
+      "Agent",
+      "Skill"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/hooks/pre-tool-safety.js",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/hooks/pre-write-content-safety.js",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node scripts/hooks/pre-write-xhs-compliance.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/hooks/post-bash-image-audit.js",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/hooks/session-summary.js",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,144 +1,100 @@
-# Skill Scout 决策表 — v5 升级模式
+# Skill Scout 决策表
 
-**Team**：xiaohongshu-content-creator_teams_v5
-**模式**：v4 → v5 增量升级（4 沿用 + 1 新增）
-**日期**：2026-05-05
-
----
-
-## 总览
-
-| Skill | 决策 | 评分 | 来源 |
-|-------|-----|------|------|
-| xiaohongshu-style-writer | 沿用 v4 | N/A | xiaohongshu-content-creator_teams_v4/.claude/skills/xiaohongshu-style-writer/ |
-| xiaohongshu-image-prompt-writer | 沿用 v4 | N/A | xiaohongshu-content-creator_teams_v4/.claude/skills/xiaohongshu-image-prompt-writer/ |
-| self-improving-agent | 沿用 v4 | N/A | xiaohongshu-content-creator_teams_v4/.claude/skills/self-improving-agent/ |
-| instinct-engine | 沿用 v4 | N/A | xiaohongshu-content-creator_teams_v4/.claude/skills/instinct-engine/ |
-| **canvas-image-composer** | **原创 v5** | N/A（无可用候选） | phase-2-tech-specs.md（Section 1-9 完整代码）+ phase-2-ux-specs.md（SKILL.md 框架） |
-
-**说明**：phase-1-architecture.md 中 §3 给出的 v5 实际 skill 名称是 `xiaohongshu-style-writer` 和 `xiaohongshu-image-prompt-writer`（v4 动态生成的风格指南骨架），与任务说明中的 `dify-rest-client` / `xiaohongshu-validator` 占位名不同——以 phase-1 架构为准，v4 实际目录已确认这 4 个 skill 全部存在。
+> 基于 visionary-tech 规格结论：所有核心能力已由原有 Python 脚本覆盖，无需引入外部 skill。
+> 本表为实际搜索验证后的最终决策。
 
 ---
 
-## canvas-image-composer 复用搜索结果
+## batch-validation
 
-### 本地已安装 skill（~/.claude/skills/）
-扫描结果：
-- 与图片合成/canvas 渲染相关的本地 skill：**无匹配**
-- 相关但不适用：`baoyu-image-gen`（已 deprecated，AI 生成而非合成）、`baoyu-xhs-images`（已 deprecated）
-
-### skills.sh 在线搜索（`npx skills find canvas`）
-返回 6 个候选，全部**与需求不符**：
-
-| 候选 | 安装量 | 评分 | 不匹配原因 |
-|------|-------|------|----------|
-| anthropics/skills@canvas-design | 48.1K | 25/100 | "canvas-design" 是 SVG/HTML 视觉设计指南，非 @napi-rs/canvas 程序合成 |
-| kepano/obsidian-skills@json-canvas | 18.4K | 10/100 | Obsidian 白板格式，无关 |
-| markdown-viewer/skills@canvas | 1.6K | 10/100 | Markdown 预览画布 |
-| axtonliu/...obsidian-canvas-creator | 945 | 8/100 | Obsidian 画板 |
-| deanpeters/...problem-framing-canvas | 832 | 5/100 | 产品策略画布 |
-| deanpeters/...lean-ux-canvas | 812 | 5/100 | UX 商业画布 |
-
-**最高分 25/100 < 阈值 65**，且 Tech 规格已提供 100% 完整可运行代码（@napi-rs/canvas + 6 primitives + 5 模板 + 中文字体注册 + overlay 预制脚本），**结论：原创**。
-
-### 评分维度详细（针对 anthropics/skills@canvas-design 这个看似最相关的候选）
-
-| 维度 | 满分 | 得分 | 说明 |
-|------|-----|------|-----|
-| 触发场景匹配 | 30 | 8 | 关键词 "canvas" 重合，但目标完全不同（视觉规范 vs 程序合成）|
-| 步骤完整度 | 25 | 5 | 没有 Node.js 像素级合成步骤 |
-| 工具适配 | 20 | 4 | 不依赖 @napi-rs/canvas，无字体注册/drawText 中文换行 |
-| 输出格式 | 15 | 5 | 输出是设计建议，不是 JPG 文件 |
-| 可定制性 | 10 | 3 | 改造成本 > 90%，等于重写 |
-| **合计** | **100** | **25** | **无复用价值** |
-
----
-
-## 给 toolsmith-skills 的执行指令
-
-### 1. 沿用 v4 的 4 个 skill — 整目录复制
-
-```bash
-SRC_V4="xiaohongshu-content-creator_teams/xiaohongshu-content-creator_teams_v4/.claude/skills"
-DST_V5="$OUTPUT_DIR/.claude/skills"
-mkdir -p "$DST_V5"
-
-for skill in xiaohongshu-style-writer xiaohongshu-image-prompt-writer self-improving-agent instinct-engine; do
-  cp -r "$SRC_V4/$skill" "$DST_V5/"
-  echo "✅ 沿用 v4: $skill"
-done
-```
-
-**验证**：复制后每个目录至少包含 `SKILL.md`。
-
-### 2. 原创 canvas-image-composer
-
-#### 文件清单
-
-参考 phase-1-architecture.md §4.1 的部署位置规划：
-- **Skill 主文件** → `<v5>/.claude/skills/canvas-image-composer/SKILL.md`
-- **配套脚本** → `<v5>/scripts/canvas/`（team 根目录 scripts/，**不在 skill 内**）
-- **资源** → `<v5>/assets/fonts/`、`<v5>/assets/overlays/`（team 根目录 assets/）
-- **依赖声明** → `<v5>/package.json`（team 根目录）
-
-#### 由 toolsmith-skills 创建（skill 目录内）
-
-| 文件 | 来源 | 内容 |
+| 维度 | 得分 | 说明 |
 |-----|------|------|
-| `.claude/skills/canvas-image-composer/SKILL.md` | phase-2-ux-specs.md SKILL.md 框架 + phase-2-tech-specs.md 接口签名 | 完整 skill 主文件，含 frontmatter + 6 原语 API + 5 模板调用示例 + 错误处理表 |
-| `.claude/skills/canvas-image-composer/LICENSE.md` | 新创建 | MIT/Apache 双重声明 + 字体 LICENSE 引用说明 |
+| 功能匹配度 | 5/40 | skills.sh 上无专门「batch validation」skill。最接近的 `camacho/ai-skills@validate`（529 installs）是通用 AI 输出校验，无 pairwise similarity、同质化检测、时效性锚点等题目工厂特有的验证逻辑 |
+| 可适配度 | 5/30 | 通用 validate skill 与 validate.py 的 6 条同质化规则（H1-H6）+ 逐行 10+ 字段检查完全不匹配，适配成本接近重写 |
+| 质量评分 | 10/20 | 通用 skill 质量尚可，但功能不相关 |
+| 维护活跃度 | 5/10 | `validate` skill 有一定安装量，但非目标领域 |
+| **总分** | **25/100** | |
 
-#### 由 toolsmith-infra/toolsmith-assembler 创建（team 根目录，**非 skill 内**）
-
-注意：phase-1 架构明确将代码放在 team 根目录的 `scripts/canvas/` 而非 skill 内，便于 image-processor agent 直接 `bash node scripts/canvas/compose.js` 调用。toolsmith-skills 只生成 SKILL.md，其余文件由 toolsmith-infra/assembler 处理：
-
-| 文件 | 来源 | 路径 |
-|------|-----|------|
-| package.json | phase-2-tech-specs.md Section 1 | `<v5>/package.json` |
-| scripts/canvas/font-registry.js | phase-2-tech-specs.md Section 3 | team 根 |
-| scripts/canvas/primitives.js | phase-2-tech-specs.md Section 4 | team 根 |
-| scripts/canvas/compose.js | phase-2-tech-specs.md Section 5 | team 根 |
-| scripts/canvas/templates/cover-text-only.js | phase-2-tech-specs.md Section 6.1 | team 根 |
-| scripts/canvas/templates/cover-image-text.js | phase-2-tech-specs.md Section 6.2 | team 根 |
-| scripts/canvas/templates/left-image-right-text.js | phase-2-tech-specs.md Section 6.3 | team 根 |
-| scripts/canvas/templates/grid-3x3.js | phase-2-tech-specs.md Section 6.4 | team 根 |
-| scripts/canvas/templates/quote-card.js | phase-2-tech-specs.md Section 6.5 | team 根 |
-| scripts/canvas/setup-fonts.js | phase-2-tech-specs.md Section 7 | team 根 |
-| scripts/canvas/setup-overlays.js | phase-2-tech-specs.md Section 8 | team 根 |
-| assets/fonts/.gitkeep + LICENSE.md | 新创建 | team 根 |
-| assets/overlays/.gitkeep | 新创建 | team 根 |
-
-> **跨 agent 协作提示**：toolsmith-skills 仅负责 `.claude/skills/canvas-image-composer/` 目录内容（SKILL.md + LICENSE.md）。team 根目录的 `scripts/canvas/` + `assets/` + `package.json` 应由 **toolsmith-infra**（package.json）和 **toolsmith-assembler**（scripts/assets）按 phase-2-tech-specs.md 内容写入；如果 toolsmith-infra/assembler 未覆盖此范围，toolsmith-skills 应跨边界补齐并在 done.txt 备注。
-
-#### SKILL.md frontmatter 模板
-
-```yaml
----
-name: canvas-image-composer
-description: |
-  Activate when an agent needs to compose Xiaohongshu cover/content images via Node.js Canvas pipeline (programmatic JPG/PNG rendering with Chinese fonts, layered images, text wrapping, vignette/grain overlays).
-  当 agent 需要通过 Node.js Canvas 管线程序化合成小红书封面/正文图（中文字体、图层叠加、文字换行、暗角/颗粒贴图）时触发。
-  Handles: 5 templates (cover-text-only, cover-image-text, left-image-right-text, grid-3x3, quote-card), config.json driven, 6 primitives API.
-  Keywords: canvas, image composition, 图片合成, 小红书配图, napi-rs, 字体渲染, 模板渲染, JPG export.
-  Do NOT use for: AI image generation (use image2 generations instead), SVG design (use frontend-design), Obsidian canvas (unrelated).
-allowed-tools: Read, Bash
-model: inherit
-color: magenta
----
-```
-
-#### 完成标准（toolsmith-skills 自检）
-
-- [ ] `.claude/skills/canvas-image-composer/SKILL.md` 存在且 frontmatter 三必需字段齐全（name/description/allowed-tools）
-- [ ] SKILL.md 含 6 原语 API 表格、5 模板路由表、config.json 输入示例
-- [ ] LICENSE.md 引用思源黑体 / Noto Color Emoji 字体许可
-- [ ] 4 个沿用 v4 的 skill 目录已 cp -r 完整复制（每个含 SKILL.md）
-- [ ] 写入 toolsmith-skills-count.txt: `5`
+**决策**：不创建（脚本已覆盖）
+**来源**：skills.sh / 本地
+**操作**：quality-validator agent 直接 Bash 调用 `validate.py <questions-batch.json>` 即可，validate.py 已完整实现 pairwise similarity（difflib.SequenceMatcher + 归一化）、时效性检查、附件合规检查、L1/L2 类目白名单等全部逻辑
 
 ---
 
-## 重要提醒（给下游 agent）
+## attachment-download-indexer
 
-1. **canvas-image-composer 是 skill 但代码在 team 根**：SKILL.md 内的 "执行步骤" 章节应明确指引调用方使用 `bash node scripts/canvas/compose.js <config.json>`，不要试图在 skill 内 require 脚本。
-2. **v4 4 个 skill 的兼容性**：phase-1-architecture.md §3 明确 v5 未变更这 4 个 skill 的内容，cp -r 即可，不需要修改 SKILL.md。
-3. **失败降级**：若 v4 某 skill 目录缺失，写入 `toolsmith-skills-failed.txt` 并报告 toolsmith-assembler。
+| 维度 | 得分 | 说明 |
+|-----|------|------|
+| 功能匹配度 | 5/40 | skills.sh 上无「attachment download + index builder」组合 skill。最接近的 `googleworkspace/cli@recipe-save-email-attachments`（14.2K installs）是 Gmail 附件保存，与题目工厂的 topic-based 附件下载（urllib + SSL 降级 + _index.json 维护 + used_in <=2 复用计数）完全不同 |
+| 可适配度 | 3/30 | 领域完全不匹配，无法改编 |
+| 质量评分 | 10/20 | Gmail skill 本身质量高，但无关 |
+| 维护活跃度 | 8/10 | Google Workspace skill 活跃 |
+| **总分** | **26/100** | |
+
+**决策**：不创建（脚本已覆盖）
+**来源**：skills.sh / 本地
+**操作**：attachment-matcher agent 直接 Bash 调用 `fetch_attachments.py --topic <topic_id>`，该脚本已覆盖：单 topic 下载、SSL 降级、超时重试、文件大小校验、`_index.json` 索引维护、`used_in` 复用计数（<=2）
+
+---
+
+## csv-export-formatter
+
+| 维度 | 得分 | 说明 |
+|-----|------|------|
+| 功能匹配度 | 15/40 | `curiouslearner/devkit@csv-processor`（291 installs）和 `besoeasy/open-skills@json-and-csv-data-transformation`（48 installs）提供通用 JSON/CSV 转换，但题目工厂需要 UTF-8-SIG + BOM（Excel 兼容）、特定字段顺序、附件路径映射、人工审核标记等定制化格式 |
+| 可适配度 | 10/30 | 通用 CSV skill 无法满足题目工厂的字段 Schema 和编码要求，需大量改造 |
+| 质量评分 | 12/20 | csv-processor 质量中等，但功能偏通用 |
+| 维护活跃度 | 6/10 | 有一定安装量，维护一般 |
+| **总分** | **43/100** | |
+
+**决策**：不创建（脚本已覆盖）
+**来源**：skills.sh / 本地
+**操作**：data-coordinator agent 直接调用 `generate_question.py` 内含的 CSV 写入逻辑，或自行用 Python 标准库 `csv` 模块实现（字段顺序、UTF-8-SIG、BOM 已明确）。无需引入外部 skill 增加依赖。
+
+---
+
+## topic-seed-sampling
+
+| 维度 | 得分 | 说明 |
+|-----|------|------|
+| 功能匹配度 | 0/40 | skills.sh 上无「topic seed sampling」「seed pool」「combination generator」相关 skill。`oaustegard/claude-skills@sampling-bluesky-zeitgeist` 是 Bluesky 社交数据采样，完全无关 |
+| 可适配度 | 0/30 | 无候选可适配 |
+| 质量评分 | 0/20 | 无候选 |
+| 维护活跃度 | 0/10 | 无候选 |
+| **总分** | **0/100** | |
+
+**决策**：不创建（脚本已覆盖）
+**来源**：skills.sh / 本地
+**操作**：topic-planner agent 直接 Bash 调用 `seed_pool.py --n N --prefix auto`，该脚本已完整实现从 seeds/*.yaml 的 (uid, 主体, 领域, 切入) 组合采样，输出 JSON 数组供 topic-plan.json 使用
+
+---
+
+## question-parser
+
+| 维度 | 得分 | 说明 |
+|-----|------|------|
+| 功能匹配度 | 5/40 | skills.sh 上 parser skill 均为通用文档解析（`doc-parser` 2.2K installs、`pdf-parser` 179 installs、`content-parser` 750 installs），无针对「题目生成」的 XML/JSON/Regex 三模式 parser |
+| 可适配度 | 5/30 | 通用文档 parser 与题目工厂的 parse_row（XML/JSON/Regex 三种模式提取题目字段）完全不匹配 |
+| 质量评分 | 10/20 | 通用 parser skill 质量尚可 |
+| 维护活跃度 | 6/10 | 有一定维护 |
+| **总分** | **26/100** | |
+
+**决策**：不创建（脚本已覆盖）
+**来源**：skills.sh / 本地
+**操作**：question-generator agent 优先自然语言生成题目，格式不标准时 Bash 调用 `generate_question.py --seed '...'` 作为 parser 兜底。generate_question.py 的 parse_row 已覆盖 XML/JSON/Regex 三种模式，无需外部 skill。
+
+---
+
+## 综合结论
+
+| Skill 需求 | 最高分候选 | 得分 | 决策 | 理由 |
+|-----------|----------|------|------|------|
+| Batch validation | camacho/ai-skills@validate | 25 | 不创建 | validate.py 已覆盖全部验证逻辑（H1-H6 + 逐行检查） |
+| Attachment 下载/索引 | googleworkspace/cli@recipe-save-email-attachments | 26 | 不创建 | fetch_attachments.py 已覆盖 topic-based 下载 + 索引维护 |
+| CSV 导出格式化 | curiouslearner/devkit@csv-processor | 43 | 不创建 | generate_question.py 内含 CSV 逻辑，或标准库 csv 即可 |
+| Topic 种子采样 | 无候选 | 0 | 不创建 | seed_pool.py 已完整实现组合采样 |
+| 题目生成 Parser | 无相关候选 | 26 | 不创建 | generate_question.py 的 parse_row 已覆盖三模式 |
+
+**最终决策**：本题工厂团队（题目工厂）的所有核心能力已由原有 Python 脚本（`seed_pool.py`、`generate_question.py`、`validate.py`、`fetch_attachments.py`）完整覆盖，**无需引入任何外部 skill**，也无需创建新 skill。
+
+**agent 调用方式**：各 agent 通过 `Bash` 权限直接调用对应 Python 脚本，脚本路径固定为 `D:/题目工厂/pipeline/*.py`。详见 `phase-2-tech-specs.md` 第 5 节「Python 脚本工具化方案」。

@@ -1,0 +1,24 @@
+# 通用敏感词库
+# 格式: [级别]|[类别]|[关键词]
+# 级别: fatal(致命) / serious(严重) / warning(警告)
+
+fatal|政治|反动
+fatal|政治|颠覆
+fatal|色情|淫秽
+fatal|色情|嫖娼
+fatal|暴力|恐怖袭击
+fatal|暴力|爆炸物制作
+fatal|暴力|枪支弹药
+fatal|毒品|冰毒
+fatal|毒品|海洛因
+fatal|毒品|大麻
+fatal|赌博|博彩
+fatal|赌博|六合彩
+serious|政治|敏感事件
+serious|色情|成人内容
+serious|暴力|血腥
+serious|诈骗|传销
+serious|诈骗|非法集资
+warning|广告|极限词
+warning|广告|第一
+warning|广告|最好
