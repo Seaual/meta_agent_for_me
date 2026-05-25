@@ -55,6 +55,37 @@ echo -e "\n${BOLD}═══ Dimension 3: Logic Feasibility (max 10) ═══${N
         log_fail "CLAUDE.md 缺少「$section_name」(-2)"
       fi
     done
+
+    harness_sections=(
+      "上下文管理"
+      "工具系统"
+      "执行编排"
+      "状态和记忆"
+      "评估和观察"
+      "约束和回复"
+    )
+    for harness_doc in "$CLAUDE_MD" "$TARGET_DIR/README.md"; do
+      if [[ ! -f "$harness_doc" ]]; then
+        continue
+      fi
+      harness_label=$(basename "$harness_doc")
+      if grep -qi "Harness" "$harness_doc" || grep -q "上下文管理" "$harness_doc"; then
+        log_pass "$harness_label 含 Harness 设计章节"
+      else
+        deduct 2 "$harness_label 缺少 Harness 设计章节" \
+          "补充 ## Harness 设计，并写出 6 个部分的真实运行设计"
+        log_fail "$harness_label 缺少 Harness 设计章节 (-2)"
+      fi
+      for harness_section in "${harness_sections[@]}"; do
+        if grep -q "$harness_section" "$harness_doc"; then
+          log_pass "$harness_label 含「$harness_section」"
+        else
+          deduct 1 "$harness_label 缺少「$harness_section」" \
+            "在 $harness_label 中补充 $harness_section，并绑定真实文件/agent/skill"
+          log_warn "$harness_label 缺少「$harness_section」(-1)"
+        fi
+      done
+    done
   fi
 
   # 3B. 工具充分性：每个 agent 声明的能力 vs 实际 allowed-tools

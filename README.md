@@ -143,111 +143,50 @@ A：能。建议在 Git Bash 或 WSL 中运行，避免脚本兼容问题。
 
 Meta-Agents 是一个运行在 Claude Code 中的系统，通过 6 阶段流水线分析用户需求，自动生成完整的 Agent Team 配置——包括 agent、skill、脚本、workspace 协议和文档——每个阶段都有质量把关。
 
-### v8 新增（相比 v7）
-
-- **Task Board** — 集中式进度看板 + Event Log 审计日志，替代分散的文件存在性检查
-- **Worktree 隔离** — Phase 4b 并行 Toolsmith 在独立 git worktree 中工作，避免写冲突
-- **Context Compaction** — 长任务 agent 自行压缩上下文，写入摘要继续工作
-- **快速通道修正** — Phase 0（Q1-Q8）始终执行，简单需求跳过 Phase 1 Council 三方分析
-- **Slash Commands** — 生成的 Team 自带 `.claude/commands/` 入口，用户用 `/project:team` 启动
-- **Hook 系统** — 生成的 Team 包含 hooks（安全检查/会话摘要/文档提醒），配置在 settings.json
-- **运行时 Profile** — minimal/standard/strict 三级约束，Phase 0 Q8 选择，运行时可切换
-- **Instincts 持续学习** — .learnings/ 从扁平条目升级为两层结构（entries/ + instincts/），带置信度和衰减
-- **Agent/Skill Scout 分离** — 原 library-scout 拆分为 agent-scout 和 skill-scout，并保留 legacy 兼容入口
-
-### 核心特性
+### v8 核心特性
 
 - **Director Council 议事会** — 三个并行 Director（战略/批判/技术）分析每个需求，加权规则自动收敛
 - **多 Visionary 架构** — 架构审查后，UX + Tech 并行规格设计
 - **4 个用户检查点** — Council 结论、架构方案、规格确认、最终交付
 - **Agent/Skill Scout** — 搜索 VoltAgent（100+ agent）和 skills.sh（7000+ skill），100 分制评分，四层决策
 - **Sentinel 六维评分** — 格式合规、协作冲突、逻辑可行性、代码安全、内容质量、可执行性
-- **自我改进** — 可选的 `.learnings/` 集成，记录运行时经验
-- **版本升级** — 在现有 team 基础上增量迭代
+- **Worktree 隔离** — Phase 4b 并行生成在独立 git worktree 中执行，避免写冲突
+- **Context Compaction** — 长任务 agent 自行压缩上下文，写入摘要继续工作
+- **运行时 Profile** — minimal/standard/strict 三级约束
+- **Instincts 持续学习** — `.learnings/` 两层结构（entries/ + instincts/），带置信度和衰减
+- **Generated Team Harness Contract** — 每个产出的 Agent Team 都必须在 `CLAUDE.md` 和 `README.md` 中显式写出 harness 六部分
 
-### 架构
+完整架构详情、Agent 职责表、复用评分规则、Sentinel 评分维度、运行时 Profile 对比，见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+
+### 架构概览
 
 ```
 用户需求
     │
     ▼
-🏛️ Director Council（需求收集 Q1-Q7 + 初始化 Task Board）
+🏛️ Director Council
     │
-    ├── 简单需求（≤3 agent）→ Task Board Phase 1 标记 ⏭️ → 直接 Phase 2
+    ├── 简单需求（≤3 agent）→ 快速通道
     │
-    ├── 复杂需求 ↓
-    ▼  [并行 × 3，context: fork]
-┌─────────────────────────────────────┐
-│ 🎯 Strategic │ 🔍 Critical │ 📐 Tech │
-└─────────────────────────────────────┘
-    │ 自动收敛（加权规则裁决）
-    ▼ 检查点 1：用户确认 Council 结论
-    │
-    ▼
-🏗️ Visionary-Arch（串行）
-    │
-    ▼ 检查点 2：用户确认架构方案
-    │
-    ▼  [并行 × 2+，context: fork]
-┌──────────────────────────────────┐
-│ 🎨 UX (≤5 agent: 1个)           │
-│ 🎨 UX-1, UX-2... (>5: 分组并行) │
-│              🔧 Tech              │
-└──────────────────────────────────┘
-    │ 检查点 3：用户确认差异摘要
-    │
-    ▼
-🔭 Agent Scout ‖ Skill Scout（并行搜索）
-    │
-    ▼
-🏗️ Infra → [📝 Agents ‖ 🔌 Skills] → 📦 Assembler
-    │         (Worktree 隔离)
-    ▼
-🔍 Sentinel（6 维度并行评分，最多 3 轮）
-    │
-    ▼
-检查点 4：最终交付
+    └── 复杂需求 → [🎯 Strategic │ 🔍 Critical │ 📐 Tech] 并行
+                        │
+                        ▼ 检查点 1
+                     🏗️ Visionary-Arch
+                        │
+                        ▼ 检查点 2
+                     [🎨 UX │ 🔧 Tech] 并行
+                        │
+                        ▼ 检查点 3
+                     🔭 Agent Scout ‖ Skill Scout
+                        │
+                        ▼
+                     🏗️ Infra → [📝 Agents ‖ 🔌 Skills] → 📦 Assembler
+                        │
+                        ▼
+                     🔍 Sentinel（≤3 轮）
+                        │
+                        ▼ 检查点 4：交付
 ```
-
-### 团队成员（15 个 Agent）
-
-| 组 | Agent | 职责 |
-|---|-------|------|
-| Council | `director-council` | 流程控制 + 需求收集 + 全部检查点 + Task Board 管理 |
-| | `director-strategic` | 价值交付 + 边界定义 |
-| | `director-critical` | 风险识别 + 简化建议 |
-| | `director-technical` | 技术分解 + 数据流 |
-| Visionary | `visionary-arch` | 架构设计 + Agent 矩阵 + 拓扑 |
-| | `visionary-ux` | 五层 Prompt 精雕（支持分组并行）|
-| | `visionary-tech` | Skill/MCP 选型 + 工具权限 |
-| Scout | `agent-scout` | VoltAgent + agency-agents 搜索 + 100 分制评分 |
-| | `skill-scout` | 本地 + skills.sh 在线搜索 + 100 分制评分 |
-| Toolsmith | `toolsmith-infra` | 基础设施 + hooks 配置 + self-improving 配置 |
-| | `toolsmith-agents` | Agent 文件生成（Worktree 隔离）|
-| | `toolsmith-skills` | Skill 搜索/安装/创建 |
-| | `create-skill-agent` | 从零创建 skill / 改编 agency-agents |
-| | `toolsmith-assembler` | Worktree 合并 + README + Slash Commands |
-| 审查 | `sentinel` | 六维并行评分引擎 |
-
-### 复用管道
-
-| 分数 | 决策 | 操作 |
-|-----|------|------|
-| ≥70 | ✅ 直接复用 | 复制并调整 frontmatter |
-| 50-69 | 🔧 下载改编 | 保留核心结构，改编业务逻辑 |
-| <50 | ✏️ 参考原创 | 输出 Top 2-3 候选的可参考设计模式 |
-| 无候选 | ✏️ 纯原创 | 从零创建 |
-
-### Sentinel 六维评分
-
-| 维度 | 检查内容 |
-|------|---------|
-| 格式合规 | frontmatter、命名、文件结构、执行模型合规 |
-| 协作冲突 | 触发词重叠、workspace 写入冲突、共享资源初始化 |
-| 逻辑可行性 | 上下文传递协议、workspace 覆盖 |
-| 代码安全 | 凭证、eval 注入、bash 白名单 |
-| 内容质量 | 执行框架、降级行为、错误处理完整性 |
-| 可执行性 | workspace 路径、工具权限、团队入口 SKILL.md |
 
 ### 快速启动
 
@@ -287,29 +226,9 @@ npx skills add openclaw/skills@self-improving-agent -a claude-code -g -y
     ├── agents/            # Agent 文件
     ├── skills/            # Skill 文件
     ├── commands/          # Slash Commands（v8 新增）
-    │   └── team           # /project:team 入口
     ├── scripts/           # Hook 脚本（v8 新增）
-    │   └── hooks/
     └── workspace/         # 运行时数据
 ```
-
-### 运行时 Profile
-
-| Profile | Hook 行为 | 适用场景 |
-|---------|----------|---------|
-| `minimal` | 仅安全检查 | 个人项目、快速原型 |
-| `standard` | 安全 + 会话摘要 | 团队日常开发（默认）|
-| `strict` | 全部 hook + 审批 | 生产环境、安全敏感 |
-
-### Windows 注意事项
-
-```bash
-# 如果 npx 不可用
-export PATH="$PATH:$APPDATA/npm"
-export PATH="$PATH:C:/Program Files/nodejs"
-```
-
-Sentinel and several generator helper steps currently rely on Bash scripts. On Windows, use Git Bash or WSL in addition to Node.js.
 
 ---
 
@@ -321,18 +240,6 @@ Sentinel and several generator helper steps currently rely on Bash scripts. On W
 
 Meta-Agents runs inside Claude Code to analyze user requirements and generate complete Agent Team configurations — agents, skills, scripts, workspace protocols, and documentation — through a 6-phase pipeline with quality gates.
 
-### What's New in v8
-
-- **Task Board** — Centralized progress dashboard + Event Log audit trail
-- **Worktree Isolation** — Phase 4b parallel Toolsmith works in isolated git worktrees
-- **Context Compaction** — Long-running agents self-compress context and continue
-- **Fast Track** — Phase 0 always runs; simple needs skip Council analysis
-- **Slash Commands** — Generated teams include `.claude/commands/` entry points
-- **Hook System** — Teams include security/session-summary/doc-reminder hooks
-- **Runtime Profile** — minimal/standard/strict constraint levels
-- **Instincts** — Two-layer .learnings/ with confidence and decay
-- **Scout Separation** — library-scout split into agent-scout + skill-scout, with a legacy compatibility alias retained
-
 ### Key Features
 
 - **Director Council** — Three parallel directors with weighted auto-convergence
@@ -340,29 +247,13 @@ Meta-Agents runs inside Claude Code to analyze user requirements and generate co
 - **4 User Checkpoints** — Council, architecture, specs, delivery
 - **Agent/Skill Scout** — VoltAgent + skills.sh search, 100-point scoring
 - **Sentinel 6-Dimension Scoring** — Parallel execution, up to 3 auto-fix rounds
-- **Self-Improving** — Optional `.learnings/` integration
-- **Version Upgrade** — Increment existing teams
+- **Worktree Isolation** — Phase 4b parallel generation in isolated git worktrees
+- **Context Compaction** — Long-running agents self-compress context and continue
+- **Runtime Profile** — minimal/standard/strict constraint levels
+- **Instincts** — Two-layer `.learnings/` with confidence and decay
+- **Generated Team Harness Contract** — Every produced Agent Team must explicitly describe the 6 harness parts (context management, tool system, execution orchestration, state/memory, evaluation/observation, constraints/response) in both `CLAUDE.md` and `README.md`
 
-### Team Members (15 Core Agents + 1 Legacy Compatibility Agent)
-
-| Group | Agent | Role |
-|-------|-------|------|
-| Council | `director-council` | Flow control + requirements + Task Board |
-| | `director-strategic` | Value delivery + boundaries |
-| | `director-critical` | Risk identification + simplification |
-| | `director-technical` | Technical decomposition |
-| Visionary | `visionary-arch` | Architecture + topology |
-| | `visionary-ux` | 5-layer prompt design |
-| | `visionary-tech` | Skill/MCP selection + permissions |
-| Scout | `agent-scout` | VoltAgent + agency-agents search |
-| | `skill-scout` | Local + skills.sh online search |
-| Toolsmith | `toolsmith-infra` | Infrastructure + hooks + self-improving |
-| | `toolsmith-agents` | Agent generation (Worktree) |
-| | `toolsmith-skills` | Skill search/install/create |
-| | `create-skill-agent` | Create skill from scratch/adapt |
-| | `toolsmith-assembler` | Merge worktrees + Slash Commands |
-| Review | `sentinel` | 6-dimension parallel scoring |
-| Legacy | `library-scout` | Backward-compatible pre-v8 scout entry point |
+Full architecture details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ### Quick Start
 
@@ -370,11 +261,12 @@ Meta-Agents runs inside Claude Code to analyze user requirements and generate co
 git clone https://github.com/Seaual/meta_agent_for_me.git
 cd meta_agent_for_me
 
-# Optional
+# Optional: pre-clone agent libraries
 git clone --depth 1 https://github.com/VoltAgent/awesome-claude-code-subagents.git
 git clone https://github.com/msitarzewski/agency-agents
-npx skills add openclaw/skills@self-improving-agent -a claude-code -g -y
 ```
+
+Then in Claude Code:
 
 ```
 /meta-agent
@@ -391,9 +283,8 @@ npx skills add openclaw/skills@self-improving-agent -a claude-code -g -y
     ├── agents/
     ├── skills/
     ├── commands/          # Slash Commands (new in v8)
+    ├── scripts/           # Hook scripts (new in v8)
     └── workspace/
-├── scripts/
-│   └── hooks/            # Runtime hook scripts (new in v8)
 ```
 
 ---
@@ -406,8 +297,10 @@ meta_agent_for_me/
 ├── CONVENTIONS.md                         # Conventions
 ├── USER.md                                # User preferences
 ├── README.md
+├── docs/
+│   └── ARCHITECTURE.md                    # Technical architecture
 ├── .claude/
-│   ├── agents/                            # 16 files: 15 core + 1 legacy compatibility agent
+│   ├── agents/                            # 16 files: 15 core + 1 legacy
 │   │   ├── director-council.md
 │   │   ├── director-strategic.md
 │   │   ├── director-critical.md
@@ -417,7 +310,7 @@ meta_agent_for_me/
 │   │   ├── visionary-tech.md
 │   │   ├── agent-scout.md                 # v8: new
 │   │   ├── skill-scout.md                 # v8: new
-│   │   ├── library-scout.md               # legacy compatibility alias
+│   │   ├── library-scout.md               # legacy compatibility
 │   │   ├── toolsmith-infra.md
 │   │   ├── toolsmith-agents.md
 │   │   ├── toolsmith-skills.md
@@ -447,7 +340,8 @@ meta_agent_for_me/
 │   │   ├── skill-design.md
 │   │   └── instincts.md
 │   ├── scripts/
-│   └── templates/
+│   ├── templates/
+│   └── workspace/                         # Runtime data
 └── [team]_teams/                          # Output
 ```
 

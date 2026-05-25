@@ -14,6 +14,37 @@
 
 ---
 
+## 生成 Team 的 Harness 六部分契约
+
+所有产出的 Agent Team **必须显式包含**以下 6 个 harness 部分，且不能只写抽象原则，必须绑定到当前 Team 的真实产物：
+
+1. **上下文管理**
+2. **工具系统**
+3. **执行编排**
+4. **状态和记忆**
+5. **评估和观察**
+6. **约束和回复**
+
+### 落盘要求
+
+- `CLAUDE.md` 必须包含 `## Harness 设计`，并在其下用 6 个小节分别说明上述部分。
+- `README.md` 必须包含 `## Harness 设计`，并用用户可执行的语言解释这 6 个部分。
+- 每个小节都必须引用当前 Team 的具体文件、目录、agent、skill、hook 或 command。
+- 如果某一部分被简化，也必须写明「为何简化」以及「由什么替代」，不能直接省略标题。
+
+### 六部分最小内容
+
+| 部分 | 至少要说明什么 |
+|------|---------------|
+| 上下文管理 | workspace 文件、上下游读写关系、上下文压缩/简化策略 |
+| 工具系统 | allowed-tools、skills、hooks、MCP、commands 入口 |
+| 执行编排 | 触发方式、拓扑、检查点、重试/降级路径 |
+| 状态和记忆 | done/error 文件、task board、event log、`.learnings/` |
+| 评估和观察 | output-validator、sentinel、评分文件、日志或审计点 |
+| 约束和回复 | 安全规则、profile、guard agent、输出格式和用户回复约束 |
+
+---
+
 ## Agent Frontmatter 规范
 
 每个 agent 的 frontmatter **必须**包含以下字段：

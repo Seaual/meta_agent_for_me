@@ -14,6 +14,46 @@
 
 ---
 
+## Harness 设计
+
+### 1. 上下文管理
+
+- **上下文载体**：[例如 `.claude/workspace/*.md`、`*-done.txt`、中间产物目录]
+- **传递方式**：[哪些 agent 写入，哪些 agent 读取]
+- **压缩/简化策略**：[是否有 context compaction，或为何不需要]
+
+### 2. 工具系统
+
+- **Agent 工具权限**：[allowed-tools 的分层原则]
+- **Skill / Hook / Command**：[当前 Team 实际启用的 skills、hooks、commands]
+- **外部能力**：[MCP / API / 本地脚本；如无则明确写无]
+
+### 3. 执行编排
+
+- **触发入口**：[用户如何启动 Team 或关键 agent]
+- **拓扑与阶段**：[串行/并行/检查点/回路]
+- **失败处理**：[重试、降级、fallback 路径]
+
+### 4. 状态和记忆
+
+- **运行状态**：[done/error/task board/event log 等状态文件]
+- **长期记忆**：[`.learnings/`、instincts；如无则说明原因]
+- **恢复方式**：[中断后靠什么继续]
+
+### 5. 评估和观察
+
+- **质量校验**：[output-validator / sentinel / 本地校验规则]
+- **可观测信号**：[日志、评分、报告、审计文件]
+- **人工检查点**：[用户在哪些节点需要确认]
+
+### 6. 约束和回复
+
+- **安全约束**：[guard agent、pre-tool hook、profile]
+- **输出契约**：[每个关键 agent 的输出文件或格式]
+- **用户回复风格**：[最终交付、失败、部分完成时如何回应]
+
+---
+
 ## Team 成员
 
 | Agent | 职责 | 工具权限 | 来源 |
@@ -38,13 +78,22 @@
 ├── CLAUDE.md
 ├── CONVENTIONS.md
 └── .claude/
+    ├── settings.json
     ├── agents/
     │   ├── [agent-1].md
+    │   └── [agent-N].md
+    ├── commands/
+    │   ├── team.md
     │   └── [agent-N].md
     ├── skills/
     │   └── [skill-N]/SKILL.md
     └── workspace/
-        └── README.md
+        ├── README.md
+        ├── [agent-name]-output.md
+        └── [agent-name]-done.txt
+└── .learnings/
+    ├── entries/
+    └── instincts/
 ```
 
 ---

@@ -89,11 +89,39 @@ done
 # 替换 CLAUDE.md 中的占位符
 ```
 
+## Step 2b：补全 CLAUDE.md 的 Harness 六部分
+
+在 Infra 生成的 `## Harness 设计` 骨架下，填入当前 Team 的真实运行细节：
+
+- `上下文管理`：列出 workspace 输入输出文件、上下游 agent、context compaction 或简化说明
+- `工具系统`：列出 allowed-tools、skills、hooks、MCP、commands/team.md
+- `执行编排`：列出触发方式、拓扑、检查点、重试/降级路径
+- `状态和记忆`：列出 done/error 文件、task board、event log、`.learnings/`
+- `评估和观察`：列出 output-validator、sentinel、评分和日志文件
+- `约束和回复`：列出 guard agent、安全 hook、Profile、输出格式和用户回复约束
+
+要求：
+
+- 必须引用真实文件名、目录名、agent 名或 skill 名。
+- 如果某一项被简化，写明原因与替代机制。
+- 不允许保留抽象占位语句。
+
 ---
 
 ## Step 3：生成 README.md
 
 以 `.claude/templates/readme-template.md` 为骨架，填入实际数据（协作拓扑、文件树、团队名称、版本、时间戳）。
+
+**新增强制要求**：README.md 必须生成 `## Harness 设计` 章节，并用面向使用者的语言解释同样的 6 个部分：
+
+1. 上下文管理
+2. 工具系统
+3. 执行编排
+4. 状态和记忆
+5. 评估和观察
+6. 约束和回复
+
+这 6 个小节必须说明“用户运行这个 Team 时，实际会发生什么”，而不是重复架构口号。
 
 生成后执行去重检查：检测重复的 `##` 标题，保留首次出现，删除后续。
 

@@ -42,6 +42,19 @@ echo -e "\n${BOLD}═══ Dimension 6: Executability (max 10) ═══${NC}"
     log_pass ".claude/workspace/ 目录存在"
   fi
 
+  echo -e "\n  检查 Harness 六部分是否可落地..."
+  for harness_doc in "$CLAUDE_MD" "$TARGET_DIR/README.md"; do
+    if [[ ! -f "$harness_doc" ]]; then
+      continue
+    fi
+    harness_doc_label=$(basename "$harness_doc")
+    if ! grep -q "上下文管理" "$harness_doc"; then
+      deduct 2 "$harness_doc_label 缺少 Harness 六部分，无法指导运行时落地" \
+        "补充 Harness 设计 6 小节，并写明对应运行文件与入口"
+      log_fail "$harness_doc_label 缺少 Harness 六部分 (-2)"
+    fi
+  done
+
   # 6B. 工具最小权限审查（有 Bash 权限但提示词没说明原因）
   echo -e "\n  检查工具权限合理性..."
   local bash_without_reason=0

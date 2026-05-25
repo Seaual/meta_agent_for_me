@@ -1,3 +1,1 @@
-{"ts":"2026-05-17T00:00:00","event":"init","phase":"0","agent":"director-council","status":"🔄","note":"new team request"}
-{"ts":"2026-05-17T00:05:00","event":"phase_complete","phase":"0","agent":"director-council","status":"✅","note":"Q8=standard, video mode=both, script format=JSON"}
-{"ts":"2026-05-17T00:05:00","event":"phase_start","phase":"1","agent":"director-council","status":"🔄","note":"full council path, 4 agents estimated"}
+{"ts":"2026-05-24T00:00:00","event":"workspace-reset","note":"neat-freak cleanup"}

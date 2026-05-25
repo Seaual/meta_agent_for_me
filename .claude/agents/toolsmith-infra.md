@@ -63,6 +63,26 @@ bash .claude/scripts/conventions-gen.sh "$OUTPUT_DIR"
 
 写入 CLAUDE.md 包含：@引用、项目概述、Team 成员占位符、工作流拓扑、上下文传递协议、初始化 section、降级规则。
 
+**新增强制要求**：CLAUDE.md 必须显式包含 `## Harness 设计`，并使用以下 6 个二级/三级小节描述当前 Team 的运行时设计：
+
+1. `### 上下文管理`
+2. `### 工具系统`
+3. `### 执行编排`
+4. `### 状态和记忆`
+5. `### 评估和观察`
+6. `### 约束和回复`
+
+每个小节都必须绑定到真实产物，例如：
+
+- `.claude/workspace/*.md` / `*-done.txt`
+- `.claude/settings.json` / `scripts/hooks/*.js`
+- `.claude/commands/team.md`
+- `.learnings/entries/` / `.learnings/instincts/`
+- `output-validator` / `sentinel`
+- 具体 guard agent、review agent、fallback 规则
+
+如果当前 Team 不需要某项能力（例如无 MCP、无长期记忆、单 Agent 无并行），也要在对应小节中明确写出简化原因和替代机制，不能省略标题。
+
 如果 `self-improving.txt` = `yes`，在 @引用中包含 `@.claude/skills/self-improving-agent/SKILL.md`。
 
 ## Step 4：创建目录结构 + git init

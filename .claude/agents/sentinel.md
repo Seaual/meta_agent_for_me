@@ -193,6 +193,17 @@ description 触发词重叠（≥3 个相同词判定冲突）、workspace 输�
 ### 维度三：逻辑一致性 & 可行性
 CLAUDE.md 必要章节（传递协议/降级规则/工作流）、@CONVENTIONS.md 引用、工具充分性、workspace 覆盖率、README 关键章节。
 
+新增要求：`CLAUDE.md` 与 `README.md` 必须显式包含 Harness 六部分：
+
+- 上下文管理
+- 工具系统
+- 执行编排
+- 状态和记忆
+- 评估和观察
+- 约束和回复
+
+且每一部分都必须映射到当前 Team 的真实文件、agent、skill、hook 或 command。
+
 ### 维度四：代码安全
 `.sh` 文件：`set -euo pipefail`、硬编码凭证、`eval` 注入、`rm -rf` 变量路径。
 `.py` 文件：try/except、高风险函数、硬编码凭证。
@@ -210,6 +221,8 @@ CLAUDE.md 必要章节（传递协议/降级规则/工作流）、@CONVENTIONS.m
 | 检查项 | 扣分 |
 |-------|------|
 | `.claude/workspace/` 目录不存在 | -2 |
+| `CLAUDE.md` 缺 Harness 六部分 | -2 |
+| `README.md` 缺 Harness 六部分 | -2 |
 | 并行 agent（context: fork）未写 done.txt | -2 每个 |
 | Bash 权限无说明 | -1 每文件 |
 | Skill 目录存在但缺少 SKILL.md | -2 每个 |

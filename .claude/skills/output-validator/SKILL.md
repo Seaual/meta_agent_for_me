@@ -30,6 +30,36 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 
 ## 检查项
 
+### 0. Harness 六部分完整性
+
+生成结果必须显式包含以下 6 个 harness 部分：
+
+1. 上下文管理
+2. 工具系统
+3. 执行编排
+4. 状态和记忆
+5. 评估和观察
+6. 约束和回复
+
+检查方式：
+
+```bash
+for doc in "CLAUDE.md" "README.md"; do
+  [ -f "$doc" ] || continue
+  grep -q "Harness" "$doc" || grep -q "上下文管理" "$doc" || {
+    echo "❌ $doc 缺 Harness 设计章节"; PASS=false;
+  }
+  for section in "上下文管理" "工具系统" "执行编排" "状态和记忆" "评估和观察" "约束和回复"; do
+    grep -q "$section" "$doc" || { echo "❌ $doc 缺 $section"; PASS=false; }
+  done
+done
+```
+
+额外要求：
+
+- 6 个小节必须引用真实文件、目录、agent、skill、hook 或 command。
+- 不允许只写抽象原则，如“要管理上下文”“要注意安全”，必须写出当前 Team 用什么做。
+
 ### 1. 基础格式
 
 ```bash
