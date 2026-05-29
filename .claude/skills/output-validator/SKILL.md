@@ -53,12 +53,31 @@ for doc in "CLAUDE.md" "README.md"; do
     grep -q "$section" "$doc" || { echo "❌ $doc 缺 $section"; PASS=false; }
   done
 done
+
+TEAM_SKILL=$(find .claude/skills -mindepth 1 -maxdepth 2 -name SKILL.md 2>/dev/null | while read f; do
+  if grep -q "Harness" "$f" || grep -q "上下文管理" "$f"; then
+    echo "$f"
+    break
+  fi
+done)
+if [ -z "$TEAM_SKILL" ]; then
+  TEAM_SKILL=$(find .claude/skills -mindepth 1 -maxdepth 2 -name SKILL.md 2>/dev/null | head -1)
+fi
+if [ -n "$TEAM_SKILL" ]; then
+  grep -q "Harness" "$TEAM_SKILL" || grep -q "上下文管理" "$TEAM_SKILL" || {
+    echo "❌ $TEAM_SKILL 缺 Harness 设计章节"; PASS=false;
+  }
+  for section in "上下文管理" "工具系统" "执行编排" "状态和记忆" "评估和观察" "约束和回复"; do
+    grep -q "$section" "$TEAM_SKILL" || { echo "❌ $TEAM_SKILL 缺 $section"; PASS=false; }
+  done
+fi
 ```
 
 额外要求：
 
 - 6 个小节必须引用真实文件、目录、agent、skill、hook 或 command。
 - 不允许只写抽象原则，如“要管理上下文”“要注意安全”，必须写出当前 Team 用什么做。
+- 团队入口 `SKILL.md` 必须从“整个 Team 是一个 skill”的视角解释这 6 个部分。
 
 ### 1. 基础格式
 

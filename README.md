@@ -154,9 +154,47 @@ Meta-Agents 是一个运行在 Claude Code 中的系统，通过 6 阶段流水�
 - **Context Compaction** — 长任务 agent 自行压缩上下文，写入摘要继续工作
 - **运行时 Profile** — minimal/standard/strict 三级约束
 - **Instincts 持续学习** — `.learnings/` 两层结构（entries/ + instincts/），带置信度和衰减
-- **Generated Team Harness Contract** — 每个产出的 Agent Team 都必须在 `CLAUDE.md` 和 `README.md` 中显式写出 harness 六部分
+- **Generated Team Harness Contract** — 每个产出的 Agent Team 都必须在 `CLAUDE.md`、`README.md` 和 team-level `SKILL.md` 中显式写出 harness 六部分
 
 完整架构详情、Agent 职责表、复用评分规则、Sentinel 评分维度、运行时 Profile 对比，见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+
+### Harness 设计
+
+#### 1. 上下文管理
+
+- Meta-Agents 自己通过 [`.claude/workspace/`](D:\agentset\.claude\workspace) 传递跨阶段状态。
+- 关键文件包括 `phase-*.md`、`council-*.md`、`*-decisions.md`、`*-done.txt`、`output-dir.txt`。
+- 并行 agent 通过 `context: fork` 执行，依赖 workspace 文件而不是 shell 继承变量。
+
+#### 2. 工具系统
+
+- 用户入口是 [`.claude/commands/meta-agent.md`](D:\agentset\.claude\commands\meta-agent.md)。
+- 团队入口 skill 是 [`.claude/skills/meta-agents/SKILL.md`](D:\agentset\.claude\skills\meta-agents\SKILL.md)。
+- Agent、skill、rules、scripts 分别位于 [`.claude/agents/`](D:\agentset\.claude\agents)、[`.claude/skills/`](D:\agentset\.claude\skills)、[`.claude/rules/`](D:\agentset\.claude\rules)、[`.claude/scripts/`](D:\agentset\.claude\scripts)。
+
+#### 3. 执行编排
+
+- 编排从 `director-council` 开始，经 Visionary、Scout、Toolsmith，最终到 Sentinel。
+- 自动执行部分由 `agent-architect-build` 串联 Phase 3.5 到 Phase 6。
+- 并行生成使用 worktree 隔离，失败时可降级为直接并行。
+
+#### 4. 状态和记忆
+
+- 运行状态由 `task-board.md`、`event-log.jsonl`、`checkpoint-*-status.txt`、`sentinel-retry-count.txt` 等文件维护。
+- 可选长期记忆依赖 `.learnings/` 和 self-improving / instincts 机制。
+- 工作流恢复依赖 workspace 中间文件，不依赖人工回忆上轮上下文。
+
+#### 5. 评估和观察
+
+- 结构自检通过 `output-validator` 完成。
+- 六维质量评分通过 `sentinel` + `sentinel-score/run.sh` 完成。
+- 主要观测文件包括 `task-board.md`、`event-log.jsonl`、`sentinel-report.json`、`sentinel-last-issues.md`。
+
+#### 6. 约束和回复
+
+- 约束来自 `core.md`、`workspace.md`、`execution.md`、`task-board.md`、`hooks.md`。
+- 运行时约束通过 Profile、hook、安全规则和 Sentinel 扣分策略落实。
+- 最终交付必须说明生成目录、当前状态、失败点和后续操作建议。
 
 ### 架构概览
 
@@ -251,7 +289,7 @@ Meta-Agents runs inside Claude Code to analyze user requirements and generate co
 - **Context Compaction** — Long-running agents self-compress context and continue
 - **Runtime Profile** — minimal/standard/strict constraint levels
 - **Instincts** — Two-layer `.learnings/` with confidence and decay
-- **Generated Team Harness Contract** — Every produced Agent Team must explicitly describe the 6 harness parts (context management, tool system, execution orchestration, state/memory, evaluation/observation, constraints/response) in both `CLAUDE.md` and `README.md`
+- **Generated Team Harness Contract** — Every produced Agent Team must explicitly describe the 6 harness parts (context management, tool system, execution orchestration, state/memory, evaluation/observation, constraints/response) in `CLAUDE.md`, `README.md`, and the team-level `SKILL.md`
 
 Full architecture details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

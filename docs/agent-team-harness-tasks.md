@@ -2,7 +2,15 @@
 
 ## Goal
 
-Ensure every generated Agent Team explicitly includes the 6 harness parts:
+Ensure every generated Agent Team explicitly includes the 6 harness parts.
+
+This applies to three layers at the same time:
+
+- team runtime docs: `CLAUDE.md`
+- team user docs: `README.md`
+- team entry skill: `.claude/skills/[team-name]/SKILL.md`
+
+The 6 parts are:
 
 1. Context Management
 2. Tool System
@@ -25,6 +33,7 @@ These parts must be described as concrete runtime design tied to the generated t
 - [x] Update the README template so the harness sections become part of the generated output shape.
 - [x] Update validator instructions so missing harness sections become a validation issue.
 - [x] Update Sentinel review instructions so harness completeness is part of quality review.
+- [x] Extend the same harness requirement to the generated team-level `SKILL.md`.
 
 ### Next Round
 
@@ -41,6 +50,7 @@ These parts must be described as concrete runtime design tied to the generated t
 
 - Generated `CLAUDE.md` contains a `Harness` section with all 6 parts.
 - Generated `README.md` contains a `Harness` section with all 6 parts.
+- Generated team-level `SKILL.md` contains a `Harness` section with all 6 parts.
 - The 6 parts are tied to real team artifacts, not abstract descriptions only.
 - Validation fails if a generated team omits any harness part.
 - Sentinel review treats harness incompleteness as a logic/executability defect.

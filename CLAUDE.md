@@ -29,6 +29,46 @@
 
 ---
 
+## Harness 设计
+
+### 1. 上下文管理
+
+- 主上下文载体是 `.claude/workspace/`，所有跨阶段信息通过 `phase-*.md`、`council-*.md`、`*-decisions.md`、`*-done.txt` 传递。
+- 并行 agent 使用 `context: fork`，必须从 `output-dir.txt`、`profile.txt`、`worktree-mode.txt` 等文件回读状态，而不是依赖父进程变量。
+- 长任务支持 `compact-<agent-name>.md` 作为 Context Compaction 摘要文件，避免长链路执行时上下文过载。
+
+### 2. 工具系统
+
+- 用户入口是 `.claude/commands/meta-agent.md`，团队入口 skill 是 `.claude/skills/meta-agents/SKILL.md`。
+- 执行主体由 `.claude/agents/*.md` 提供，辅助能力由 `.claude/skills/*/SKILL.md` 提供。
+- 安全、Hook、脚本与运行时规则分别由 `.claude/rules/*.md`、`.claude/scripts/*.sh`、`.claude/skills/infra-hooks-gen/` 和 `.claude/skills/sentinel-score/` 管理。
+
+### 3. 执行编排
+
+- 编排入口为 `director-council`，负责需求收集、检查点控制和后续阶段推进。
+- 自动构建链路由 `.claude/skills/agent-architect-build/SKILL.md` 执行 Phase 3.5-6，串起 Scout、Toolsmith、Sentinel。
+- 并行生成采用 git worktree 隔离，失败时按降级规则回退到直接并行模式。
+
+### 4. 状态和记忆
+
+- 运行状态通过 `task-board.md`、`event-log.jsonl`、`checkpoint-*-status.txt`、`sentinel-retry-count.txt` 等文件维护。
+- 可选长期记忆通过 `.learnings/`、`infra-self-improving` 和 `instincts-enabled.txt` 驱动。
+- 恢复执行依赖 workspace 中间文件，而不是对话历史。
+
+### 5. 评估和观察
+
+- 汇总装配后先运行 `output-validator` 做结构性自检，再由 `sentinel` 调用 `sentinel-score/run.sh` 做六维评分。
+- 主要观测文件包括 `task-board.md`、`event-log.jsonl`、`sentinel-report.json`、`sentinel-last-issues.md`、`sentinel-score-history.txt`。
+- 用户在四个检查点看到关键状态，形成人工观察面。
+
+### 6. 约束和回复
+
+- 约束来自 `core.md`、`workspace.md`、`execution.md`、`task-board.md`、`hooks.md`。
+- 运行时通过 `profile.txt`、hook 生成器、Tool 权限和 Sentinel 扣分规则实施约束。
+- 交付回复由 `director-council` 和 `agent-architect-build` 负责，必须说明输出目录、阶段状态、失败原因与下一步。
+
+---
+
 ## Team 成员
 
 ### Director Council（议事会）
@@ -241,6 +281,7 @@ Agent Scout + Skill Scout 负责所有搜索和评分（并行执行），Toolsm
 | `output-validator` | 输出校验器（格式/权限/commands/hooks/instincts 全面自检）|
 | `sentinel-score` | 评分引擎脚本（由 sentinel 调用） |
 | `pipeline-check` | 流水线预检（dry-run 结构验证） |
+| `meta-agents` | 本体团队入口 skill，暴露整个 Team 的生成、升级、修复能力 |
 
 ---
 

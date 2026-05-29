@@ -193,7 +193,7 @@ description 触发词重叠（≥3 个相同词判定冲突）、workspace 输�
 ### 维度三：逻辑一致性 & 可行性
 CLAUDE.md 必要章节（传递协议/降级规则/工作流）、@CONVENTIONS.md 引用、工具充分性、workspace 覆盖率、README 关键章节。
 
-新增要求：`CLAUDE.md` 与 `README.md` 必须显式包含 Harness 六部分：
+新增要求：`CLAUDE.md`、`README.md`、团队入口 `SKILL.md` 都必须显式包含 Harness 六部分：
 
 - 上下文管理
 - 工具系统
@@ -223,6 +223,7 @@ CLAUDE.md 必要章节（传递协议/降级规则/工作流）、@CONVENTIONS.m
 | `.claude/workspace/` 目录不存在 | -2 |
 | `CLAUDE.md` 缺 Harness 六部分 | -2 |
 | `README.md` 缺 Harness 六部分 | -2 |
+| 团队入口 `SKILL.md` 缺 Harness 六部分 | -2 |
 | 并行 agent（context: fork）未写 done.txt | -2 每个 |
 | Bash 权限无说明 | -1 每文件 |
 | Skill 目录存在但缺少 SKILL.md | -2 每个 |

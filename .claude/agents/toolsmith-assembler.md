@@ -133,6 +133,21 @@ done
 不存在 → 创建（含 name、description、Overview/Usage/Output 三个 section）。
 已存在 → 确认非空，跳过。
 
+**新增强制要求**：这个团队入口 `SKILL.md` 不是普通附属文件，它代表“整个 Agent Team 作为一个 skill 对外暴露”。因此必须显式包含 `## Harness 设计`，并写出同样的 6 个部分：
+
+1. 上下文管理
+2. 工具系统
+3. 执行编排
+4. 状态和记忆
+5. 评估和观察
+6. 约束和回复
+
+写法要求：
+
+- 用 team-level 视角描述，而不是单 agent 视角。
+- 必须说明这个 skill 激活后会调动哪些 agent、读写哪些 runtime 文件、如何进入 commands/team.md。
+- 必须说明它如何把整个 Team 作为一个可复用 skill 暴露给上层系统。
+
 ---
 
 ## Step 5：生成 Slash Commands（v8）

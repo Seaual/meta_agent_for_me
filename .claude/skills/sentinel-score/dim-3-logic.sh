@@ -64,7 +64,16 @@ echo -e "\n${BOLD}═══ Dimension 3: Logic Feasibility (max 10) ═══${N
       "评估和观察"
       "约束和回复"
     )
-    for harness_doc in "$CLAUDE_MD" "$TARGET_DIR/README.md"; do
+    TEAM_ENTRY_SKILL=$(find "$SKILL_DIR" -mindepth 1 -maxdepth 2 -name "SKILL.md" 2>/dev/null | while read f; do
+      if grep -q "Harness" "$f" || grep -q "上下文管理" "$f"; then
+        echo "$f"
+        break
+      fi
+    done)
+    if [[ -z "${TEAM_ENTRY_SKILL:-}" ]]; then
+      TEAM_ENTRY_SKILL=$(find "$SKILL_DIR" -mindepth 1 -maxdepth 2 -name "SKILL.md" 2>/dev/null | head -1 || true)
+    fi
+    for harness_doc in "$CLAUDE_MD" "$TARGET_DIR/README.md" "$TEAM_ENTRY_SKILL"; do
       if [[ ! -f "$harness_doc" ]]; then
         continue
       fi

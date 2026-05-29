@@ -29,6 +29,7 @@
 
 - `CLAUDE.md` 必须包含 `## Harness 设计`，并在其下用 6 个小节分别说明上述部分。
 - `README.md` 必须包含 `## Harness 设计`，并用用户可执行的语言解释这 6 个部分。
+- 团队入口 `.claude/skills/[team-name]/SKILL.md` 也必须包含 `## Harness 设计`，用于把整个 Agent Team 作为一个 skill 暴露给上层调用。
 - 每个小节都必须引用当前 Team 的具体文件、目录、agent、skill、hook 或 command。
 - 如果某一部分被简化，也必须写明「为何简化」以及「由什么替代」，不能直接省略标题。
 
